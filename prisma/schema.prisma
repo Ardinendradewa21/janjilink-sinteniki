@@ -32,6 +32,12 @@ model User {
   sessions       Session[]
   eventTypes     EventType[]
   availabilities Availability[]
+
+  // Fase 9: Workspace & Tim
+  // Satu user hanya bisa memiliki satu workspace (ownedWorkspace nullable).
+  ownedWorkspace       Workspace?        @relation("WorkspaceOwner")
+  // User juga bisa menjadi anggota workspace milik orang lain.
+  workspaceMemberships WorkspaceMember[]
 }
 
 // Model akun OAuth dari provider (Google, dll) yang terhubung ke user.
@@ -200,6 +206,44 @@ model Availability {
   updatedAt DateTime @updatedAt
 }
 
+// ─── Workspace ────────────────────────────────────────────────────────────────
+// Tim kecil yang dikelola oleh satu host (pemilik).
+// Satu user hanya bisa punya satu workspace (relasi @unique di ownerId).
+// Anggota tim bisa melihat booking satu sama lain (fitur Phase 9).
+model Workspace {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+
+  // Pemilik workspace — @unique agar satu user hanya bisa buat satu workspace
+  ownerId String   @unique
+  owner   User     @relation("WorkspaceOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+
+  members   WorkspaceMember[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ─── WorkspaceMember ──────────────────────────────────────────────────────────
+// Relasi antara satu user dengan satu workspace.
+// Satu user hanya bisa menjadi anggota satu workspace (@@unique).
+model WorkspaceMember {
+  id   String        @id @default(cuid())
+  // Peran anggota: OWNER (pemilik) atau MEMBER (anggota biasa)
+  role WorkspaceRole @default(MEMBER)
+
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  joinedAt DateTime @default(now())
+
+  // Satu user tidak bisa menjadi anggota workspace yang sama lebih dari satu kali
+  @@unique([workspaceId, userId])
+}
+
 // Status booking dari tamu.
 enum BookingStatus {
   PENDING
@@ -211,6 +255,12 @@ enum BookingStatus {
 enum LocationType {
   ONLINE
   OFFLINE
+}
+
+// Peran anggota dalam workspace.
+enum WorkspaceRole {
+  OWNER   // Pemilik workspace, bisa undang dan hapus anggota
+  MEMBER  // Anggota biasa, bisa lihat booking tim
 }
 
 // Enum platform meeting online yang dipilih user.
