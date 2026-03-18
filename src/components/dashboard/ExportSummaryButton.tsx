@@ -10,25 +10,14 @@
 //
 // Dipanggil dari halaman detail meeting (server component).
 // Data di-pass sebagai props agar tidak perlu fetch ulang di client.
+//
+// formatWIBSummary diimport dari src/lib/date.ts (shared utility),
+// tidak lagi didefinisikan ulang di sini.
 
 import { useState } from "react";
 import { Copy, Check } from "lucide-react";
 import { toast } from "sonner";
-
-// Format tanggal + jam untuk tampilan di ringkasan teks
-function formatDateWIB(utcDate: Date): string {
-  const DAY_NAMES = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
-  const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"];
-
-  const wibMs = utcDate.getTime() + 7 * 60 * 60 * 1000;
-  const wib = new Date(wibMs);
-
-  const day = DAY_NAMES[wib.getUTCDay()];
-  const date = `${wib.getUTCDate()} ${MONTH_NAMES[wib.getUTCMonth()]} ${wib.getUTCFullYear()}`;
-  const time = `${wib.getUTCHours().toString().padStart(2, "0")}:${wib.getUTCMinutes().toString().padStart(2, "0")}`;
-
-  return `${day}, ${date} pukul ${time} WIB`;
-}
+import { formatWIBSummary } from "@/lib/date";
 
 interface ExportSummaryButtonProps {
   booking: {
@@ -58,7 +47,8 @@ export function ExportSummaryButton({
       "",
       `👤 Tamu     : ${booking.inviteeName}`,
       `📌 Event    : ${booking.eventType.title}`,
-      `🕐 Waktu    : ${formatDateWIB(booking.startTime)}`,
+      // formatWIBSummary dari shared lib — menghasilkan "Senin, 18 Mar 2026 pukul 09:00 WIB"
+      `🕐 Waktu    : ${formatWIBSummary(booking.startTime)}`,
       "",
       "📝 CATATAN",
       "───────────────────────────────────",

@@ -1,94 +1,41 @@
-import { CalendarX2, Clock3, Mail, MapPin, Phone, Video, NotebookPen } from "lucide-react";
+// ─── DashboardBookingsPage ────────────────────────────────────────────────────
+// Daftar semua booking milik host, dikelompokkan: Mendatang & Selesai.
+// Route: /dashboard/bookings
+//
+// Pola arsitektur:
+//  - getRequiredUserId()    → dari src/lib/session.ts (tidak perlu tulis ulang)
+//  - getBookingsForUser()   → dari src/server/queries/bookings.ts (tidak inline)
+//  - formatWIBShort()       → dari src/lib/date.ts (tidak duplikasi)
+//  - BookingActions         → client component (butuh useTransition)
+// Halaman ini sendiri hanya bertanggung jawab untuk layout dan render.
+
+import { CalendarX2, Clock3, Mail, MapPin, NotebookPen, Phone, Video } from "lucide-react";
 import Link from "next/link";
-import { redirect } from "next/navigation";
-import { auth } from "@/lib/auth";
-import prisma from "@/lib/prisma";
+import { getRequiredUserId } from "@/lib/session";
+import { formatWIBShort } from "@/lib/date";
+import { getBookingsForUser, type BookingListItem } from "@/server/queries/bookings";
 import { BookingActions } from "@/components/dashboard/BookingActions";
 
-// ─── Konstanta nama bulan dan hari dalam Bahasa Indonesia ────────────────────
-const MONTH_NAMES = [
-  "Jan", "Feb", "Mar", "Apr", "Mei", "Jun",
-  "Jul", "Agu", "Sep", "Okt", "Nov", "Des",
-];
-
-const DAY_NAMES = ["Min", "Sen", "Sel", "Rab", "Kam", "Jum", "Sab"];
-
-// ─── formatWIB ──────────────────────────────────────────────────────────────
-// Mengkonversi waktu UTC dari database ke format WIB (UTC+7) untuk ditampilkan.
-function formatWIB(utcDate: Date) {
-  const wibMs = utcDate.getTime() + 7 * 60 * 60 * 1000;
-  const wib = new Date(wibMs);
-  return {
-    day: DAY_NAMES[wib.getUTCDay()],
-    date: `${wib.getUTCDate()} ${MONTH_NAMES[wib.getUTCMonth()]} ${wib.getUTCFullYear()}`,
-    time: `${wib.getUTCHours().toString().padStart(2, "0")}:${wib.getUTCMinutes().toString().padStart(2, "0")}`,
-  };
-}
-
-// ─── Warna badge berdasarkan status booking ──────────────────────────────────
-// PENDING: kuning (menunggu), CONFIRMED: hijau (dikonfirmasi), CANCELLED: merah (batal)
+// ─── Warna badge status booking ──────────────────────────────────────────────
 const STATUS_STYLES: Record<string, { bg: string; text: string; label: string }> = {
-  PENDING: { bg: "bg-amber-100", text: "text-amber-700", label: "Menunggu" },
-  CONFIRMED: { bg: "bg-emerald-100", text: "text-emerald-700", label: "Dikonfirmasi" },
-  CANCELLED: { bg: "bg-red-100", text: "text-red-700", label: "Dibatalkan" },
+  PENDING:   { bg: "bg-amber-100",   text: "text-amber-700",   label: "Menunggu"      },
+  CONFIRMED: { bg: "bg-emerald-100", text: "text-emerald-700", label: "Dikonfirmasi"  },
+  CANCELLED: { bg: "bg-red-100",     text: "text-red-700",     label: "Dibatalkan"    },
 };
 
-// ─── DashboardBookingsPage ───────────────────────────────────────────────────
-// Halaman daftar semua booking milik host, dikelompokkan: Mendatang & Selesai.
-// Setiap booking menampilkan info tamu, waktu, status, dan tombol aksi.
-// Route: /dashboard/bookings
 export default async function DashboardBookingsPage() {
-  // Pastikan user sudah login
-  const session = await auth();
-  if (!session) redirect("/");
+  const userId = await getRequiredUserId();
 
-  // Ambil userId dari session (dengan fallback email lookup)
-  let userId = (session.user as { id?: string } | undefined)?.id;
-  if (!userId && session.user?.email) {
-    const u = await prisma.user.findUnique({
-      where: { email: session.user.email },
-      select: { id: true },
-    });
-    userId = u?.id;
-  }
-  if (!userId) redirect("/");
+  // Ambil semua booking dari query layer — tidak ada Prisma di sini
+  const bookings = await getBookingsForUser(userId);
 
   const now = new Date();
-
-  // Ambil semua booking milik user ini, termasuk status dan info event type
-  const bookings = await prisma.booking.findMany({
-    where: {
-      eventType: { userId },
-    },
-    orderBy: { startTime: "asc" },
-    select: {
-      id: true,
-      inviteeName: true,
-      inviteeEmail: true,
-      inviteeWa: true,
-      // Status booking: PENDING, CONFIRMED, atau CANCELLED
-      status: true,
-      startTime: true,
-      endTime: true,
-      eventType: {
-        select: {
-          id: true,
-          title: true,
-          duration: true,
-          locationType: true,
-          platform: true,
-        },
-      },
-    },
-  });
-
-  // Pisahkan booking mendatang dan yang sudah lewat
   const upcoming = bookings.filter((b) => b.startTime >= now);
-  const past = bookings.filter((b) => b.startTime < now);
+  const past     = bookings.filter((b) => b.startTime <  now);
 
   return (
     <section className="space-y-6">
-      {/* Header halaman */}
+      {/* Header */}
       <div className="rounded-xl border border-stone-200 bg-white p-4 shadow-sm">
         <p className="text-xl font-semibold text-stone-900">Semua Booking</p>
         <p className="mt-1 text-sm text-stone-500">
@@ -100,11 +47,9 @@ export default async function DashboardBookingsPage() {
         <EmptyState />
       ) : (
         <>
-          {/* Grup booking mendatang */}
           {upcoming.length > 0 && (
             <BookingGroup title="Mendatang" bookings={upcoming} variant="upcoming" />
           )}
-          {/* Grup booking yang sudah lewat */}
           {past.length > 0 && (
             <BookingGroup title="Selesai" bookings={past} variant="past" />
           )}
@@ -114,8 +59,7 @@ export default async function DashboardBookingsPage() {
   );
 }
 
-// ─── EmptyState ──────────────────────────────────────────────────────────────
-// Tampilan kosong saat belum ada booking sama sekali.
+// ─── EmptyState ───────────────────────────────────────────────────────────────
 function EmptyState() {
   return (
     <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-stone-300 bg-white p-12 text-center shadow-sm">
@@ -128,38 +72,22 @@ function EmptyState() {
   );
 }
 
-// ─── Tipe data booking untuk komponen ────────────────────────────────────────
-type BookingItem = {
-  id: string;
-  inviteeName: string;
-  inviteeEmail: string;
-  inviteeWa: string | null;
-  status: "PENDING" | "CONFIRMED" | "CANCELLED";
-  startTime: Date;
-  endTime: Date;
-  eventType: {
-    id: string;
-    title: string;
-    duration: number;
-    locationType: string;
-    platform: string | null;
-  };
-};
-
-// ─── BookingGroup ────────────────────────────────────────────────────────────
-// Kelompokkan booking berdasarkan kategori (Mendatang / Selesai).
+// ─── BookingGroup ─────────────────────────────────────────────────────────────
+// Kelompok booking: "Mendatang" atau "Selesai"
 function BookingGroup({
   title,
   bookings,
   variant,
 }: {
   title: string;
-  bookings: BookingItem[];
+  bookings: BookingListItem[];
   variant: "upcoming" | "past";
 }) {
   return (
     <div className="space-y-3">
-      <h2 className="text-sm font-semibold uppercase tracking-wider text-stone-500">{title}</h2>
+      <h2 className="text-sm font-semibold uppercase tracking-wider text-stone-500">
+        {title}
+      </h2>
       {bookings.map((b) => (
         <BookingCard key={b.id} booking={b} isPast={variant === "past"} />
       ))}
@@ -167,14 +95,19 @@ function BookingGroup({
   );
 }
 
-// ─── BookingCard ─────────────────────────────────────────────────────────────
-// Kartu individual untuk setiap booking.
-// Menampilkan: nama tamu, event title, waktu WIB, lokasi, status badge, + tombol aksi.
-function BookingCard({ booking, isPast }: { booking: BookingItem; isPast: boolean }) {
-  const { day, date, time } = formatWIB(booking.startTime);
-  const { time: endTime } = formatWIB(booking.endTime);
-
-  // Ambil style badge berdasarkan status booking
+// ─── BookingCard ──────────────────────────────────────────────────────────────
+// Kartu individual booking.
+// UI dibagi dua kolom: kiri (info + aksi), kanan (kontak tamu).
+function BookingCard({
+  booking,
+  isPast,
+}: {
+  booking: BookingListItem;
+  isPast: boolean;
+}) {
+  // formatWIBShort dari shared lib — tidak duplikasi di sini
+  const { day, date, time } = formatWIBShort(booking.startTime);
+  const { time: endTime }   = formatWIBShort(booking.endTime);
   const statusStyle = STATUS_STYLES[booking.status] ?? STATUS_STYLES.PENDING;
 
   return (
@@ -184,24 +117,26 @@ function BookingCard({ booking, isPast }: { booking: BookingItem; isPast: boolea
       }`}
     >
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        {/* Kolom kiri: info tamu + event */}
+        {/* Kolom kiri: info booking */}
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            {/* Dot hijau hanya untuk booking mendatang yang belum dibatalkan */}
             {!isPast && booking.status !== "CANCELLED" && (
               <span className="h-2 w-2 shrink-0 rounded-full bg-emerald-500" />
             )}
-            <p className="truncate font-semibold text-stone-900">{booking.inviteeName}</p>
-            {/* Badge status booking (Menunggu / Dikonfirmasi / Dibatalkan) */}
+            <p className="truncate font-semibold text-stone-900">
+              {booking.inviteeName}
+            </p>
             <span
               className={`inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-xs font-medium ${statusStyle.bg} ${statusStyle.text}`}
             >
               {statusStyle.label}
             </span>
           </div>
-          <p className="mt-0.5 truncate text-sm text-stone-500">{booking.eventType.title}</p>
+          <p className="mt-0.5 truncate text-sm text-stone-500">
+            {booking.eventType.title}
+          </p>
 
-          {/* Waktu dan lokasi */}
+          {/* Waktu + lokasi */}
           <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2">
             <span className="inline-flex items-center gap-1.5 text-sm text-stone-600">
               <Clock3 className="h-3.5 w-3.5 text-stone-400" />
@@ -217,15 +152,14 @@ function BookingCard({ booking, isPast }: { booking: BookingItem; isPast: boolea
             </span>
           </div>
 
-          {/* Tombol aksi: Konfirmasi / Batalkan (hanya untuk booking mendatang) */}
+          {/* Tombol konfirmasi/batal — hanya booking mendatang */}
           {!isPast && (
             <div className="mt-3">
               <BookingActions bookingId={booking.id} status={booking.status} />
             </div>
           )}
 
-          {/* Link ke halaman catatan + action items meeting.
-              Tampil di semua booking (mendatang maupun selesai) kecuali CANCELLED. */}
+          {/* Link ke halaman catatan meeting */}
           {booking.status !== "CANCELLED" && (
             <div className="mt-2">
               <Link
@@ -239,7 +173,7 @@ function BookingCard({ booking, isPast }: { booking: BookingItem; isPast: boolea
           )}
         </div>
 
-        {/* Kolom kanan: kontak tamu (email + WhatsApp) */}
+        {/* Kolom kanan: kontak tamu */}
         <div className="shrink-0 space-y-1.5 text-sm">
           <a
             href={`mailto:${booking.inviteeEmail}`}

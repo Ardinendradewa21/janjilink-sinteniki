@@ -1,20 +1,17 @@
-// ─── Halaman Analytics Dashboard ─────────────────────────────────────────────
+// ─── Analytics Dashboard ───────────────────────────────────────────────────────
 // Route: /dashboard/analytics
 //
-// Menampilkan statistik kinerja host dalam satu tampilan:
-//  1. Kartu ringkasan: total booking, booking bulan ini, completion rate
+// Statistik kinerja host dalam satu tampilan:
+//  1. Kartu ringkasan: total booking, bulan ini, completion rate
 //  2. Grafik batang booking per bulan (6 bulan terakhir)
 //  3. Performa per event type
-//  4. Jam-jam paling populer untuk booking
+//  4. Jam paling populer (peak hours WIB)
 //
-// Semua data di-fetch di server saat render (server component).
-// Komponen grafik (AnalyticsCharts) adalah client component untuk
-// memungkinkan animasi CSS dan interaktivitas hover.
+// Data di-fetch via getAnalytics() dari query layer.
+// Grafik di-render oleh AnalyticsCharts (client component, CSS murni).
 
-import { BarChart3, CalendarCheck, TrendingUp, Clock3 } from "lucide-react";
-import { redirect } from "next/navigation";
-import { auth } from "@/lib/auth";
-import prisma from "@/lib/prisma";
+import { BarChart3, CalendarCheck, Clock3, TrendingUp } from "lucide-react";
+import { getRequiredUserId } from "@/lib/session";
 import { getAnalytics } from "@/server/queries/analytics";
 import {
   MonthlyBarChart,
@@ -23,26 +20,14 @@ import {
 } from "@/components/dashboard/AnalyticsCharts";
 
 export default async function AnalyticsPage() {
-  // Verifikasi session login
-  const session = await auth();
-  let userId = (session?.user as { id?: string } | undefined)?.id;
+  const userId = await getRequiredUserId();
 
-  if (!userId && session?.user?.email) {
-    const u = await prisma.user.findUnique({
-      where: { email: session.user.email },
-      select: { id: true },
-    });
-    userId = u?.id;
-  }
-
-  if (!userId) redirect("/login");
-
-  // Ambil semua data analitik untuk user ini (satu fungsi = satu query Prisma)
+  // Satu fungsi = satu query Prisma yang mengambil semua data yang dibutuhkan
   const data = await getAnalytics(userId);
 
   return (
     <div className="space-y-6">
-      {/* ── Header halaman ──────────────────────────────────────────────── */}
+      {/* Header */}
       <div className="rounded-xl border border-stone-200 bg-white p-4 shadow-sm">
         <div className="flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-50">
@@ -57,9 +42,8 @@ export default async function AnalyticsPage() {
         </div>
       </div>
 
-      {/* ── Kartu ringkasan (3 metrik utama) ────────────────────────────── */}
+      {/* Kartu ringkasan */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        {/* Total booking sepanjang waktu */}
         <StatCard
           icon={<CalendarCheck className="h-5 w-5 text-emerald-600" />}
           label="Total Booking"
@@ -67,8 +51,6 @@ export default async function AnalyticsPage() {
           sub="sepanjang waktu"
           accent="emerald"
         />
-
-        {/* Booking bulan ini */}
         <StatCard
           icon={<TrendingUp className="h-5 w-5 text-blue-600" />}
           label="Bulan Ini"
@@ -76,8 +58,6 @@ export default async function AnalyticsPage() {
           sub="booking masuk bulan ini"
           accent="blue"
         />
-
-        {/* Completion rate */}
         <StatCard
           icon={<Clock3 className="h-5 w-5 text-amber-600" />}
           label="Completion Rate"
@@ -87,20 +67,17 @@ export default async function AnalyticsPage() {
         />
       </div>
 
-      {/* ── Grafik booking per bulan ─────────────────────────────────────── */}
+      {/* Grafik bulanan */}
       <div className="rounded-2xl border border-stone-200 bg-white p-6 shadow-sm">
         <div className="mb-5">
           <h2 className="font-semibold text-stone-900">Booking per Bulan</h2>
           <p className="mt-0.5 text-sm text-stone-500">6 bulan terakhir</p>
         </div>
-
-        {/* MonthlyBarChart: client component dengan grafik batang CSS */}
         <MonthlyBarChart data={data.monthly} />
       </div>
 
-      {/* ── Grid: event type + peak hours ────────────────────────────────── */}
+      {/* Grid: event type + peak hours */}
       <div className="grid gap-6 lg:grid-cols-2">
-        {/* Performa per event type */}
         <div className="rounded-2xl border border-stone-200 bg-white p-6 shadow-sm">
           <div className="mb-5">
             <h2 className="font-semibold text-stone-900">Performa Event Type</h2>
@@ -108,11 +85,9 @@ export default async function AnalyticsPage() {
               Event mana yang paling banyak dipesan?
             </p>
           </div>
-
           <EventTypeTable data={data.byEventType} />
         </div>
 
-        {/* Jam-jam paling populer */}
         <div className="rounded-2xl border border-stone-200 bg-white p-6 shadow-sm">
           <div className="mb-5">
             <h2 className="font-semibold text-stone-900">Jam Paling Populer</h2>
@@ -120,12 +95,11 @@ export default async function AnalyticsPage() {
               Waktu yang paling sering dipilih tamu (WIB)
             </p>
           </div>
-
           <PeakHoursChart data={data.peakHours} />
         </div>
       </div>
 
-      {/* ── Empty state jika belum ada booking sama sekali ───────────────── */}
+      {/* Empty state */}
       {data.totalBookings === 0 && (
         <div className="rounded-2xl border border-dashed border-stone-200 bg-stone-50 p-10 text-center">
           <BarChart3 className="mx-auto mb-3 h-10 w-10 text-stone-300" />
@@ -139,9 +113,8 @@ export default async function AnalyticsPage() {
   );
 }
 
-// ─── StatCard ────────────────────────────────────────────────────────────────
-// Kartu metrik ringkasan dengan ikon, nilai besar, dan sub-label.
-// Dipakai untuk: Total Booking, Bulan Ini, Completion Rate.
+// ─── StatCard ─────────────────────────────────────────────────────────────────
+// Kartu metrik dengan ikon, nilai besar, dan sub-label.
 function StatCard({
   icon,
   label,
@@ -155,12 +128,7 @@ function StatCard({
   sub: string;
   accent: "emerald" | "blue" | "amber";
 }) {
-  // Warna background ikon berdasarkan aksen
-  const bgMap = {
-    emerald: "bg-emerald-50",
-    blue: "bg-blue-50",
-    amber: "bg-amber-50",
-  };
+  const bgMap = { emerald: "bg-emerald-50", blue: "bg-blue-50", amber: "bg-amber-50" };
 
   return (
     <div className="rounded-xl border border-stone-200 bg-white p-5 shadow-sm">

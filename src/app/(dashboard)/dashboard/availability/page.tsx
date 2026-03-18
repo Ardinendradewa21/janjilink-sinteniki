@@ -1,47 +1,31 @@
-import { redirect } from "next/navigation";
-import { auth } from "@/lib/auth";
-import prisma from "@/lib/prisma";
+// ─── AvailabilityPage ────────────────────────────────────────────────────────
+// Halaman untuk mengatur jam ketersediaan per hari dalam seminggu.
+// Route: /dashboard/availability
+//
+// Pola: server component fetch data → pass ke AvailabilityForm (client component).
+
+import { getRequiredUserId } from "@/lib/session";
+import { getAvailabilityData } from "@/server/queries/dashboard";
 import { AvailabilityForm } from "@/components/dashboard/AvailabilityForm";
 
-// ─── Default availability ────────────────────────────────────────────────────
-// Ketersediaan bawaan jika user belum pernah menyimpan pengaturan.
-// Senin–Sabtu: 09:00–17:00. Minggu: tidak tersedia.
+// ─── Default availability ─────────────────────────────────────────────────────
+// Dipakai saat user belum pernah menyimpan pengaturan ketersediaan.
+// Senin (1) – Sabtu (6): aktif, 09:00–17:00. Minggu (0): nonaktif.
 const DEFAULT_DAYS = Array.from({ length: 7 }, (_, i) => ({
   dayOfWeek: i,
-  isActive: i >= 1 && i <= 6, // 1=Senin sampai 6=Sabtu aktif, 0=Minggu nonaktif
+  isActive: i >= 1 && i <= 6,
   startTime: "09:00",
   endTime: "17:00",
 }));
 
-// ─── AvailabilityPage ────────────────────────────────────────────────────────
-// Halaman server component untuk mengatur ketersediaan per hari.
-// Mengambil data availability dari database, fallback ke default jika belum ada.
-// Route: /dashboard/availability
 export default async function AvailabilityPage() {
-  // Pastikan user sudah login
-  const session = await auth();
-  if (!session) redirect("/");
+  const userId = await getRequiredUserId();
 
-  // Ambil userId dari session (dengan fallback email lookup)
-  let userId = (session.user as { id?: string } | undefined)?.id;
-  if (!userId && session.user?.email) {
-    const u = await prisma.user.findUnique({
-      where: { email: session.user.email },
-      select: { id: true },
-    });
-    userId = u?.id;
-  }
-  if (!userId) redirect("/");
+  // Ambil data ketersediaan dari DB via query layer
+  const availabilities = await getAvailabilityData(userId);
 
-  // Ambil data ketersediaan dari database, urutkan per hari (0=Minggu ... 6=Sabtu)
-  const availabilities = await prisma.availability.findMany({
-    where: { userId },
-    orderBy: { dayOfWeek: "asc" },
-    select: { dayOfWeek: true, isActive: true, startTime: true, endTime: true },
-  });
-
-  // Jika user belum pernah mengatur, gunakan default
-  // Jika sudah ada data di DB, gunakan data tersebut
+  // Jika 7 baris tersimpan di DB → pakai data DB. Jika belum lengkap → pakai default.
+  // Alasan cek 7: replace-all strategy di saveAvailability selalu simpan tepat 7 baris.
   const days =
     availabilities.length === 7
       ? availabilities.map((a) => ({
@@ -62,7 +46,7 @@ export default async function AvailabilityPage() {
         </p>
       </div>
 
-      {/* Card form ketersediaan */}
+      {/* Form ketersediaan — client component dengan 7 baris per hari */}
       <div className="max-w-2xl rounded-xl border border-stone-200 bg-white p-6 shadow-sm">
         <AvailabilityForm initialDays={days} />
       </div>

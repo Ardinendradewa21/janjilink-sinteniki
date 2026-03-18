@@ -1,35 +1,23 @@
+// ─── SettingsPage ────────────────────────────────────────────────────────────
+// Halaman pengaturan profil user (nama + slug).
+// Route: /dashboard/settings
+//
+// Pola: server component mengambil data → kirim ke SettingsForm (client component).
+// Pemisahan ini penting: server component bisa query DB, client component bisa
+// pakai hooks React (useState, useActionState).
+
 import { redirect } from "next/navigation";
-import { auth } from "@/lib/auth";
-import prisma from "@/lib/prisma";
+import { getRequiredUserId } from "@/lib/session";
+import { getSettingsData } from "@/server/queries/dashboard";
 import { SettingsForm } from "@/components/dashboard/SettingsForm";
 
-// ─── SettingsPage ────────────────────────────────────────────────────────────
-// Halaman server component untuk pengaturan profil user.
-// Mengambil data user dari database, lalu render SettingsForm (client component).
-// Route: /dashboard/settings
 export default async function SettingsPage() {
-  // Pastikan user sudah login
-  const session = await auth();
-  if (!session) redirect("/");
+  // getRequiredUserId: ambil userId dari session, redirect ke /login jika belum login
+  const userId = await getRequiredUserId();
 
-  // Ambil userId dari session (dengan fallback email lookup)
-  let userId = (session.user as { id?: string } | undefined)?.id;
-  if (!userId && session.user?.email) {
-    const u = await prisma.user.findUnique({
-      where: { email: session.user.email },
-      select: { id: true },
-    });
-    userId = u?.id;
-  }
-  if (!userId) redirect("/");
-
-  // Ambil data profil user saat ini dari database
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { name: true, email: true, slug: true },
-  });
-
-  if (!user) redirect("/");
+  // Ambil data profil yang akan di-prefill ke form
+  const user = await getSettingsData(userId);
+  if (!user) redirect("/login");
 
   return (
     <section className="space-y-6">
@@ -41,7 +29,7 @@ export default async function SettingsPage() {
         </p>
       </div>
 
-      {/* Card form profil */}
+      {/* Form profil — client component dengan useActionState */}
       <div className="max-w-lg rounded-xl border border-stone-200 bg-white p-6 shadow-sm">
         <SettingsForm name={user.name} email={user.email} slug={user.slug} />
       </div>
