@@ -1,7 +1,7 @@
 "use client";
 
 import type { LucideIcon } from "lucide-react";
-import { CalendarCheck, Clock, Link as LinkIcon, Settings } from "lucide-react";
+import { BarChart3, CalendarCheck, Clock, Link as LinkIcon, Settings } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -14,10 +14,11 @@ type SidebarItem = {
 };
 
 const sidebarItems: SidebarItem[] = [
-  { label: "Event Types", href: "/dashboard", icon: LinkIcon },
-  { label: "Bookings", href: "/dashboard/bookings", icon: CalendarCheck },
-  { label: "Ketersediaan", href: "/dashboard/availability", icon: Clock },
-  { label: "Pengaturan", href: "/dashboard/settings", icon: Settings },
+  { label: "Event Types",  href: "/dashboard",             icon: LinkIcon      },
+  { label: "Bookings",     href: "/dashboard/bookings",    icon: CalendarCheck },
+  { label: "Analytics",   href: "/dashboard/analytics",   icon: BarChart3     },
+  { label: "Ketersediaan", href: "/dashboard/availability", icon: Clock        },
+  { label: "Pengaturan",  href: "/dashboard/settings",    icon: Settings      },
 ];
 
 // ─── SidebarNav ──────────────────────────────────────────────────────────────
