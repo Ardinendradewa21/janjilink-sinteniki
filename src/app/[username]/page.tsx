@@ -3,13 +3,12 @@ import prisma from "@/lib/prisma";
 import { PublicProfileContent } from "@/components/public/PublicProfileContent";
 
 type PublicProfilePageProps = {
-  params: {
-    username: string;
-  };
+  // Next.js 16: params adalah Promise, wajib di-await sebelum dipakai
+  params: Promise<{ username: string }>;
 };
 
 export default async function PublicProfilePage({ params }: PublicProfilePageProps) {
-  const username = params.username;
+  const { username } = await params;
 
   // Cari user berdasarkan slug atau prefix email agar kompatibel dengan akun OAuth.
   const user = await prisma.user.findFirst({

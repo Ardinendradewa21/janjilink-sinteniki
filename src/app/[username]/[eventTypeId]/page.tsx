@@ -3,14 +3,12 @@ import prisma from "@/lib/prisma";
 import { BookingCalendar } from "@/components/public/BookingCalendar";
 
 type BookingPageProps = {
-  params: {
-    username: string;
-    eventTypeId: string;
-  };
+  // Next.js 16: params adalah Promise, wajib di-await sebelum dipakai
+  params: Promise<{ username: string; eventTypeId: string }>;
 };
 
 export default async function BookingPage({ params }: BookingPageProps) {
-  const { username, eventTypeId } = params;
+  const { username, eventTypeId } = await params;
 
   // Cari user berdasarkan slug atau prefix email
   const user = await prisma.user.findFirst({

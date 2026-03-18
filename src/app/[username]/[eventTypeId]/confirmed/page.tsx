@@ -5,13 +5,9 @@ import prisma from "@/lib/prisma";
 import { Button } from "@/components/ui/button";
 
 type ConfirmedPageProps = {
-  params: {
-    username: string;
-    eventTypeId: string;
-  };
-  searchParams: {
-    id?: string;
-  };
+  // Next.js 16: params dan searchParams keduanya adalah Promise
+  params: Promise<{ username: string; eventTypeId: string }>;
+  searchParams: Promise<{ id?: string }>;
 };
 
 const MONTH_NAMES = [
@@ -42,9 +38,13 @@ function formatWIB(utcDate: Date) {
 }
 
 export default async function ConfirmedPage({ params, searchParams }: ConfirmedPageProps) {
-  const { username, eventTypeId } = params;
-  const bookingId = searchParams.id;
+  // Await kedua Promise sekaligus agar tidak sequential
+  const [{ username, eventTypeId }, { id: bookingId }] = await Promise.all([
+    params,
+    searchParams,
+  ]);
 
+  // bookingId diambil dari query string ?id=... setelah booking berhasil dibuat
   if (!bookingId) notFound();
 
   // Ambil data booking beserta event type-nya
