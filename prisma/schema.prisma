@@ -1,0 +1,222 @@
+// Generator Prisma Client untuk dipakai di kode aplikasi (query database).
+generator client {
+  provider = "prisma-client-js"
+}
+
+// Konfigurasi koneksi database PostgreSQL dari file .env.
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Model host/pemilik akun yang membuat halaman janji temu.
+model User {
+  id            String    @id @default(cuid())
+  name          String
+  email         String    @unique
+  emailVerified DateTime?
+  // slug dipakai untuk URL public, contoh: janjilink.com/budi
+  // Default cuid dipakai agar login OAuth pertama tetap bisa membuat user.
+  slug          String    @unique @default(cuid())
+  image         String?
+  // Password di-hash dengan bcrypt. Nullable untuk kompatibilitas ke depan jika OAuth ditambah.
+  password      String?
+  // Menandai apakah user sudah menyelesaikan wizard onboarding (profil + availability + event pertama).
+  // Default false agar user baru diarahkan ke /onboarding sebelum masuk dashboard.
+  onboardingCompleted Boolean @default(false)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Satu user bisa punya banyak template event dan pengaturan ketersediaan.
+  accounts       Account[]
+  sessions       Session[]
+  eventTypes     EventType[]
+  availabilities Availability[]
+}
+
+// Model akun OAuth dari provider (Google, dll) yang terhubung ke user.
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+// Model session login user.
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// Model token verifikasi (dipakai untuk magic link/email verification).
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// Model template jenis meeting, misalnya "Meeting 30 Menit".
+model EventType {
+  id              String        @id @default(cuid())
+  title           String
+  description     String?
+  // Durasi dalam satuan menit.
+  duration        Int
+  // Menandai meeting online/offline.
+  locationType    LocationType  @default(ONLINE)
+  // Platform meeting untuk tipe ONLINE (opsional).
+  platform        PlatformType?
+  // Menyimpan detail lokasi atau link meeting manual (opsional).
+  locationDetails String?
+  isActive        Boolean       @default(true)
+
+  // Relasi ke pemilik event type.
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Satu event type bisa memiliki banyak booking.
+  bookings  Booking[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+// Model booking aktual yang dibuat oleh calon peserta.
+model Booking {
+  id           String        @id @default(cuid())
+  inviteeName  String
+  inviteeEmail String
+  // Nomor WhatsApp untuk reminder/broadcast (opsional).
+  inviteeWa    String?
+  // Status booking: menunggu konfirmasi, dikonfirmasi, atau dibatalkan.
+  status       BookingStatus @default(PENDING)
+
+  startTime DateTime
+  endTime   DateTime
+
+  // Link meeting online (misalnya Jitsi), opsional.
+  meetingLink String?
+
+  // Relasi wajib ke template event yang dipilih.
+  eventTypeId String
+  eventType   EventType @relation(fields: [eventTypeId], references: [id])
+
+  // Relasi opsional ke venue kalau meeting offline.
+  venueId String?
+  venue   Venue?  @relation(fields: [venueId], references: [id])
+
+  // Fitur Meeting Layer: catatan dan action items pasca-meeting.
+  // Satu booking hanya bisa punya satu catatan (one-to-one).
+  meetingNote MeetingNote?
+  // Satu booking bisa punya banyak action item.
+  actionItems ActionItem[]
+
+  createdAt DateTime @default(now())
+}
+
+// ─── MeetingNote ─────────────────────────────────────────────────────────────
+// Catatan bebas yang ditulis host setelah meeting selesai.
+// Relasi one-to-one dengan Booking (satu booking = satu catatan).
+model MeetingNote {
+  id      String @id @default(cuid())
+  // Isi catatan, bisa panjang — disimpan sebagai text biasa.
+  content String @db.Text
+
+  // Kunci asing ke Booking. Unique memastikan satu booking = satu catatan.
+  bookingId String  @unique
+  booking   Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ─── ActionItem ───────────────────────────────────────────────────────────────
+// Satu butir task/tindakan yang disepakati dalam meeting.
+// Satu booking bisa punya banyak action item (one-to-many).
+model ActionItem {
+  id     String  @id @default(cuid())
+  // Deskripsi tindakan yang perlu dilakukan.
+  text   String
+  // Apakah tindakan sudah selesai dikerjakan? Default belum (false).
+  isDone Boolean @default(false)
+  // Urutan tampil di daftar (kecil = tampil lebih atas).
+  order  Int     @default(0)
+
+  bookingId String
+  booking   Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// Model data tempat meeting offline untuk tracking dan monetisasi.
+model Venue {
+  id      String  @id @default(cuid())
+  // placeId biasanya dari Google Places / Mapbox.
+  placeId String? @unique
+  name    String
+  address String?
+  lat     Float?
+  lng     Float?
+
+  // Dipakai admin untuk lihat venue yang paling sering dipakai.
+  popularity Int @default(1)
+
+  bookings  Booking[]
+  createdAt DateTime  @default(now())
+}
+
+// Model jam ketersediaan host per hari dalam seminggu.
+model Availability {
+  id        String   @id @default(cuid())
+  // 0=Minggu, 1=Senin, ..., 6=Sabtu
+  dayOfWeek Int
+  // Format "HH:MM", contoh "09:00"
+  startTime String
+  endTime   String
+  isActive  Boolean  @default(true)
+
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// Status booking dari tamu.
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+}
+
+// Enum sederhana untuk tipe lokasi meeting.
+enum LocationType {
+  ONLINE
+  OFFLINE
+}
+
+// Enum platform meeting online yang dipilih user.
+enum PlatformType {
+  ZOOM
+  GOOGLE_MEET
+  JITSI
+  OTHER
+}
