@@ -1,32 +1,46 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { auth } from "@/lib/auth";
 import prisma from "@/lib/prisma";
+import { sendBookingConfirmedEmail, sendBookingCancelledEmail } from "@/lib/email";
+import { getRequiredUserId } from "@/lib/session";
 
 // ─── confirmBooking ──────────────────────────────────────────────────────────
 // Server Action untuk mengubah status booking menjadi CONFIRMED.
 // Hanya host (pemilik event type) yang boleh mengkonfirmasi booking.
+//
+// Setelah konfirmasi berhasil, email otomatis dikirim ke tamu berisi
+// detail jadwal lengkap + informasi lokasi/platform.
 export async function confirmBooking(bookingId: string) {
-  // Ambil session user yang sedang login
-  const session = await auth();
-  let userId = (session?.user as { id?: string } | undefined)?.id;
+  // getSessionUserId sudah menangani auth check + fallback email ke userId
+  // (logika ini dipindah ke src/lib/session.ts agar tidak duplikat)
+  const userId = await getRequiredUserId();
 
-  // Fallback: cari userId dari email jika belum tersedia di token JWT
-  if (!userId && session?.user?.email) {
-    const u = await prisma.user.findUnique({
-      where: { email: session.user.email },
-      select: { id: true },
-    });
-    userId = u?.id;
-  }
-
-  if (!session || !userId) throw new Error("Anda harus login terlebih dahulu.");
-
-  // Cari booking dan pastikan milik user ini (melalui relasi eventType → userId)
+  // Ambil booking beserta semua data yang dibutuhkan untuk email konfirmasi.
+  // Satu query mengambil: validasi kepemilikan + data tamu + data event + data host.
   const booking = await prisma.booking.findFirst({
     where: { id: bookingId, eventType: { userId } },
-    select: { id: true, status: true },
+    select: {
+      id: true,
+      status: true,
+      inviteeName: true,
+      inviteeEmail: true,
+      inviteeWa: true,
+      startTime: true,
+      endTime: true,
+      eventType: {
+        select: {
+          title: true,
+          duration: true,
+          locationType: true,
+          platform: true,
+          locationDetails: true,
+          user: {
+            select: { name: true, email: true, slug: true },
+          },
+        },
+      },
+    },
   });
 
   if (!booking) throw new Error("Booking tidak ditemukan.");
@@ -38,34 +52,67 @@ export async function confirmBooking(bookingId: string) {
     data: { status: "CONFIRMED" },
   });
 
-  // Refresh halaman bookings agar status terbaru muncul
+  // Refresh halaman bookings agar status terbaru muncul di UI
   revalidatePath("/dashboard/bookings");
+
+  // ─── Kirim Email Konfirmasi ke Tamu ───────────────────────────────────────
+  // Dilakukan setelah update DB berhasil.
+  // Jika email gagal, status booking tetap CONFIRMED — tidak di-rollback.
+  if (booking.eventType.user?.email) {
+    await sendBookingConfirmedEmail({
+      inviteeName: booking.inviteeName,
+      inviteeEmail: booking.inviteeEmail,
+      inviteeWa: booking.inviteeWa,
+      hostName: booking.eventType.user.name || "Host",
+      hostEmail: booking.eventType.user.email,
+      hostSlug: booking.eventType.user.slug || "",
+      eventTitle: booking.eventType.title,
+      duration: booking.eventType.duration,
+      startTime: booking.startTime,
+      endTime: booking.endTime,
+      locationType: booking.eventType.locationType,
+      platform: booking.eventType.platform,
+      locationDetails: booking.eventType.locationDetails,
+      bookingId: booking.id,
+    });
+  }
+
   return { success: true };
 }
 
 // ─── cancelBooking ───────────────────────────────────────────────────────────
 // Server Action untuk membatalkan booking (ubah status ke CANCELLED).
 // Bisa dipanggil untuk booking PENDING maupun CONFIRMED.
+//
+// Setelah pembatalan berhasil, email otomatis dikirim ke tamu beserta
+// link untuk booking ulang di halaman publik host.
 export async function cancelBooking(bookingId: string) {
-  // Ambil session user yang sedang login
-  const session = await auth();
-  let userId = (session?.user as { id?: string } | undefined)?.id;
+  const userId = await getRequiredUserId();
 
-  // Fallback: cari userId dari email jika belum tersedia di token JWT
-  if (!userId && session?.user?.email) {
-    const u = await prisma.user.findUnique({
-      where: { email: session.user.email },
-      select: { id: true },
-    });
-    userId = u?.id;
-  }
-
-  if (!session || !userId) throw new Error("Anda harus login terlebih dahulu.");
-
-  // Cari booking dan pastikan milik user ini
+  // Ambil booking beserta semua data yang dibutuhkan untuk email pembatalan.
   const booking = await prisma.booking.findFirst({
     where: { id: bookingId, eventType: { userId } },
-    select: { id: true, status: true },
+    select: {
+      id: true,
+      status: true,
+      inviteeName: true,
+      inviteeEmail: true,
+      inviteeWa: true,
+      startTime: true,
+      endTime: true,
+      eventType: {
+        select: {
+          title: true,
+          duration: true,
+          locationType: true,
+          platform: true,
+          locationDetails: true,
+          user: {
+            select: { name: true, email: true, slug: true },
+          },
+        },
+      },
+    },
   });
 
   if (!booking) throw new Error("Booking tidak ditemukan.");
@@ -77,7 +124,29 @@ export async function cancelBooking(bookingId: string) {
     data: { status: "CANCELLED" },
   });
 
-  // Refresh halaman bookings agar status terbaru muncul
+  // Refresh halaman bookings agar status terbaru muncul di UI
   revalidatePath("/dashboard/bookings");
+
+  // ─── Kirim Email Pembatalan ke Tamu ───────────────────────────────────────
+  // Email berisi info bahwa jadwal dibatalkan + link untuk booking ulang.
+  if (booking.eventType.user?.email) {
+    await sendBookingCancelledEmail({
+      inviteeName: booking.inviteeName,
+      inviteeEmail: booking.inviteeEmail,
+      inviteeWa: booking.inviteeWa,
+      hostName: booking.eventType.user.name || "Host",
+      hostEmail: booking.eventType.user.email,
+      hostSlug: booking.eventType.user.slug || "",
+      eventTitle: booking.eventType.title,
+      duration: booking.eventType.duration,
+      startTime: booking.startTime,
+      endTime: booking.endTime,
+      locationType: booking.eventType.locationType,
+      platform: booking.eventType.platform,
+      locationDetails: booking.eventType.locationDetails,
+      bookingId: booking.id,
+    });
+  }
+
   return { success: true };
 }

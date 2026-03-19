@@ -1,9 +1,17 @@
 "use server";
 
 import prisma from "@/lib/prisma";
+import { sendBookingRequestEmails } from "@/lib/email";
 
 // Server Action untuk menyimpan booking baru yang dibuat oleh tamu (guest).
 // Tidak memerlukan autentikasi karena tamu tidak punya akun.
+//
+// Alur:
+//   1. Validasi input form
+//   2. Pastikan event type masih aktif + ambil data host sekaligus (1 query)
+//   3. Cek konflik slot waktu
+//   4. Simpan booking ke DB (status: PENDING)
+//   5. Kirim email notifikasi ke tamu + host (paralel, non-blocking)
 export async function createBooking(formData: FormData) {
   const eventTypeId = formData.get("eventTypeId");
   const inviteeName = formData.get("inviteeName");
@@ -29,10 +37,21 @@ export async function createBooking(formData: FormData) {
   if (name.length < 2) throw new Error("Nama minimal 2 karakter.");
   if (!email.includes("@")) throw new Error("Format email tidak valid.");
 
-  // Pastikan event type masih aktif
+  // Ambil event type beserta data host dalam satu query.
+  // Sebelumnya hanya mengambil `duration`, sekarang perlu nama/email/slug host
+  // untuk dimasukkan ke template email notifikasi.
   const eventType = await prisma.eventType.findFirst({
     where: { id: eventTypeId, isActive: true },
-    select: { duration: true },
+    select: {
+      duration: true,
+      title: true,
+      locationType: true,
+      platform: true,
+      locationDetails: true,
+      user: {
+        select: { name: true, email: true, slug: true },
+      },
+    },
   });
 
   if (!eventType) throw new Error("Event type tidak ditemukan atau sudah tidak aktif.");
@@ -55,6 +74,7 @@ export async function createBooking(formData: FormData) {
 
   if (conflict) throw new Error("Slot ini sudah dipesan. Silakan pilih waktu lain.");
 
+  // Simpan booking ke database dengan status PENDING (menunggu konfirmasi host)
   const booking = await prisma.booking.create({
     data: {
       inviteeName: name,
@@ -65,6 +85,33 @@ export async function createBooking(formData: FormData) {
       eventTypeId,
     },
   });
+
+  // ─── Kirim Email Notifikasi ────────────────────────────────────────────────
+  // Dilakukan SETELAH booking tersimpan di DB supaya data sudah punya ID.
+  // Jika email gagal, booking tetap valid — tidak di-rollback.
+  // Error hanya di-log di server console, tidak dilempar ke client.
+  //
+  // sendBookingRequestEmails mengirim 2 email secara paralel:
+  //   - Ke TAMU: "Permintaan diterima, menunggu konfirmasi"
+  //   - Ke HOST: "Ada booking baru, perlu dikonfirmasi"
+  if (eventType.user?.email) {
+    await sendBookingRequestEmails({
+      inviteeName: name,
+      inviteeEmail: email,
+      inviteeWa: wa.length > 0 ? wa : null,
+      hostName: eventType.user.name || "Host",
+      hostEmail: eventType.user.email,
+      hostSlug: eventType.user.slug || "",
+      eventTitle: eventType.title,
+      duration: eventType.duration,
+      startTime,
+      endTime,
+      locationType: eventType.locationType,
+      platform: eventType.platform,
+      locationDetails: eventType.locationDetails,
+      bookingId: booking.id,
+    });
+  }
 
   return { success: true, bookingId: booking.id };
 }
