@@ -91,19 +91,23 @@ export default async function ConfirmedPage({ params, searchParams }: ConfirmedP
   return (
     <main className="min-h-screen bg-stone-50 px-4 py-16 sm:px-6">
       <div className="mx-auto w-full max-w-lg">
-        {/* Ikon sukses */}
+        {/* Ikon: warna amber menandakan "sedang menunggu konfirmasi host",
+            lebih akurat dari hijau yang biasanya berarti "sudah selesai/dikonfirmasi" */}
         <div className="mb-8 flex justify-center">
-          <div className="flex h-20 w-20 items-center justify-center rounded-full bg-emerald-100">
-            <CalendarCheck className="h-10 w-10 text-emerald-600" />
+          <div className="flex h-20 w-20 items-center justify-center rounded-full bg-amber-100">
+            <CalendarCheck className="h-10 w-10 text-amber-600" />
           </div>
         </div>
 
-        {/* Heading */}
+        {/* Heading
+            PENTING: Status booking saat ini adalah PENDING (menunggu konfirmasi host),
+            bukan CONFIRMED. Jadi judul harus jujur — "Permintaan Terkirim",
+            bukan "Booking Dikonfirmasi" yang menyesatkan tamu. */}
         <div className="mb-8 text-center">
-          <h1 className="text-2xl font-bold text-stone-900">Booking Dikonfirmasi!</h1>
+          <h1 className="text-2xl font-bold text-stone-900">Permintaan Terkirim!</h1>
           <p className="mt-2 leading-relaxed text-stone-500">
-            Hei <span className="font-semibold text-stone-700">{booking.inviteeName}</span>, jadwal
-            Anda sudah tercatat. Sampai jumpa!
+            Hei <span className="font-semibold text-stone-700">{booking.inviteeName}</span>,
+            permintaan jadwalmu sudah diterima dan sedang menunggu konfirmasi dari host.
           </p>
         </div>
 
@@ -171,11 +175,11 @@ export default async function ConfirmedPage({ params, searchParams }: ConfirmedP
             </div>
           </div>
 
-          {/* Email info */}
-          <div className="border-t border-stone-100 bg-stone-50 px-6 py-4">
-            <p className="text-sm text-stone-500">
-              Konfirmasi akan dikirim ke{" "}
-              <span className="font-medium text-stone-700">{booking.inviteeEmail}</span>
+          {/* Info email: beri tahu tamu bahwa mereka akan dapat email update selanjutnya */}
+          <div className="border-t border-stone-100 bg-amber-50 px-6 py-4">
+            <p className="text-sm text-amber-700">
+              ⏳ Menunggu konfirmasi host. Update akan dikirim ke{" "}
+              <span className="font-medium">{booking.inviteeEmail}</span>
             </p>
           </div>
         </div>
