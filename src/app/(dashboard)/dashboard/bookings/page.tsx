@@ -152,8 +152,10 @@ function BookingCard({
             </span>
           </div>
 
-          {/* Tombol konfirmasi/batal — hanya booking mendatang */}
-          {!isPast && (
+          {/* Tombol konfirmasi/batal — tampil berdasarkan STATUS, bukan waktu.
+              PENDING tetap bisa dikonfirmasi/dibatalkan meski waktunya sudah lewat
+              (host mungkin lupa, atau butuh menutup booking untuk catatan). */}
+          {booking.status !== "CANCELLED" && (
             <div className="mt-3">
               <BookingActions bookingId={booking.id} status={booking.status} />
             </div>
