@@ -11,12 +11,15 @@ import { CreateEventDialog } from "@/components/dashboard/CreateEventDialog";
 import { CopyLinkButton } from "@/components/dashboard/CopyLinkButton";
 import { EventTypeCard } from "@/components/dashboard/EventTypeCard";
 import { auth } from "@/lib/auth";
+import { CalendarPlus } from "lucide-react";
+import { EmptyState } from "@/components/ui/EmptyState";
 
 export default async function DashboardHomePage() {
   const userId = await getRequiredUserId();
 
   // Ambil event types + slug dalam satu panggilan (dua query paralel di dalam)
   const { eventTypes, slug } = await getDashboardData(userId);
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
 
   // Nama depan untuk sapaan — ambil dari session (tidak perlu query DB lagi)
   const session = await auth();
@@ -55,12 +58,11 @@ export default async function DashboardHomePage() {
 
       {/* Grid event types */}
       {eventTypes.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-stone-300 bg-white p-8 text-center shadow-sm">
-          <p className="text-lg font-semibold text-stone-900">Belum ada jadwal.</p>
-          <p className="mt-2 leading-relaxed text-stone-500">
-            Buat event pertama Anda!
-          </p>
-        </div>
+        <EmptyState
+          icon={<CalendarPlus className="h-10 w-10 text-stone-300" />}
+          title="Belum ada jadwal"
+          description="Buat event pertama kamu agar tamu bisa langsung booking waktu bersamamu."
+        />
       ) : (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {eventTypes.map((et) => (
@@ -75,6 +77,7 @@ export default async function DashboardHomePage() {
               locationDetails={et.locationDetails}
               isActive={et.isActive}
               username={slug}
+              appUrl={appUrl}
             />
           ))}
         </div>

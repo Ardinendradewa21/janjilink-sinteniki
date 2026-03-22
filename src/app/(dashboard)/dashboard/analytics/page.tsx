@@ -11,6 +11,7 @@
 // Grafik di-render oleh AnalyticsCharts (client component, CSS murni).
 
 import { BarChart3, CalendarCheck, Clock3, TrendingUp } from "lucide-react";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { getRequiredUserId } from "@/lib/session";
 import { getAnalytics } from "@/server/queries/analytics";
 import {
@@ -101,13 +102,11 @@ export default async function AnalyticsPage() {
 
       {/* Empty state */}
       {data.totalBookings === 0 && (
-        <div className="rounded-2xl border border-dashed border-stone-200 bg-stone-50 p-10 text-center">
-          <BarChart3 className="mx-auto mb-3 h-10 w-10 text-stone-300" />
-          <p className="font-semibold text-stone-700">Belum ada data analitik</p>
-          <p className="mt-1 text-sm text-stone-500">
-            Data akan muncul setelah ada booking masuk dari tamu kamu.
-          </p>
-        </div>
+        <EmptyState
+          icon={<BarChart3 className="h-10 w-10 text-stone-300" />}
+          title="Belum ada data analitik"
+          description="Data akan muncul setelah ada booking masuk dari tamu kamu."
+        />
       )}
     </div>
   );
