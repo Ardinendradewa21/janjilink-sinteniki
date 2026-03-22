@@ -1,10 +1,25 @@
 "use client";
 
+// ─── PublicProfileContent ─────────────────────────────────────────────────────
+// Halaman profil publik host — tampilan yang dilihat tamu/klien saat membuka
+// link /[username].
+//
+// Desain: mobile-first, terasa seperti app booking (mirip GoFood/Grab).
+// Struktur:
+//   1. Banner owner (jika host membuka halamannya sendiri)
+//   2. Header cover: gradient brand + avatar besar + nama
+//   3. Section "Pilih Layanan": kartu event yang bisa diklik
+//   4. Footer: powered by JanjiLink
+//
+// Animasi: Framer Motion stagger — elemen muncul berurutan dari bawah.
+
 import { motion } from "framer-motion";
-import { ArrowLeft, Clock3, Eye, MapPin, Video } from "lucide-react";
+import { ArrowLeft, ArrowRight, Clock3, Eye, MapPin, Video } from "lucide-react";
 import Link from "next/link";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/EmptyState";
+
+// ─── Types ───────────────────────────────────────────────────────────────────
 
 type PublicEventType = {
   id: string;
@@ -23,74 +38,114 @@ type PublicUser = {
 type PublicProfileContentProps = {
   username: string;
   user: PublicUser;
-  // isOwner: true jika yang membuka halaman ini adalah pemilik profil.
-  // Digunakan untuk menampilkan banner "Kembali ke Dashboard".
   isOwner?: boolean;
 };
 
-// Variants untuk animasi header (fade-in ringan).
-const headerVariants = {
-  hidden: { opacity: 0, y: 16 },
-  visible: {
-    opacity: 1,
-    y: 0,
-    transition: { duration: 0.45, ease: [0.22, 1, 0.36, 1] as [number, number, number, number] },
-  },
-};
-
-// Variants container list dengan stagger.
-const listVariants = {
-  hidden: { opacity: 1 },
-  visible: {
-    opacity: 1,
-    transition: { staggerChildren: 0.08 },
-  },
-};
-
-// Variants item card untuk efek masuk bertahap.
-const itemVariants = {
-  hidden: { opacity: 0, y: 14 },
-  visible: {
-    opacity: 1,
-    y: 0,
-    transition: { duration: 0.35, ease: [0.22, 1, 0.36, 1] as [number, number, number, number] },
-  },
-};
+// ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function getInitials(name?: string | null) {
   if (!name) return "JL";
-
-  const parts = name
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2);
-
-  if (parts.length === 0) return "JL";
-
-  return parts.map((part) => part[0]?.toUpperCase() ?? "").join("");
+  const parts = name.trim().split(/\s+/).filter(Boolean).slice(0, 2);
+  return parts.map((p) => p[0]?.toUpperCase() ?? "").join("");
 }
+
+// ─── Animasi ─────────────────────────────────────────────────────────────────
+
+// Container dengan efek stagger — anak-anaknya muncul berurutan
+const stagger = {
+  hidden:  { opacity: 1 },
+  visible: { opacity: 1, transition: { staggerChildren: 0.08 } },
+};
+
+// Setiap kartu slide dari bawah saat pertama kali muncul
+const slideUp = {
+  hidden:  { opacity: 0, y: 20 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.35, ease: [0.22, 1, 0.36, 1] as number[] } },
+};
+
+// ─── EventCard ───────────────────────────────────────────────────────────────
+// Kartu individual event type di profil publik.
+// Desain app-like: info one-glance + tombol "Pilih" yang jelas.
+function EventCard({ event, username }: { event: PublicEventType; username: string }) {
+  const isOnline = event.locationType === "ONLINE";
+
+  return (
+    <motion.div variants={slideUp}>
+      <Link
+        href={`/${username}/${event.id}`}
+        className="tap-scale group flex items-center gap-4 rounded-2xl border border-stone-200 bg-white p-5 shadow-sm transition-all hover:border-emerald-200 hover:shadow-md"
+      >
+        {/* Ikon kategori lokasi (online/offline) */}
+        <div
+          className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl ${
+            isOnline ? "bg-emerald-100" : "bg-lime-100"
+          }`}
+        >
+          {isOnline ? (
+            <Video className="h-5 w-5 text-emerald-600" />
+          ) : (
+            <MapPin className="h-5 w-5 text-lime-700" />
+          )}
+        </div>
+
+        {/* Konten: nama, deskripsi, badge */}
+        <div className="min-w-0 flex-1">
+          <p className="font-semibold leading-tight text-stone-900 group-hover:text-emerald-700">
+            {event.title}
+          </p>
+          {event.description && (
+            <p className="mt-0.5 line-clamp-1 text-sm text-stone-500">
+              {event.description}
+            </p>
+          )}
+          <div className="mt-2 flex flex-wrap gap-2">
+            {/* Badge durasi */}
+            <span className="inline-flex items-center gap-1 rounded-full bg-stone-100 px-2.5 py-0.5 text-xs font-medium text-stone-600">
+              <Clock3 className="h-3 w-3" />
+              {event.duration} menit
+            </span>
+            {/* Badge online/offline */}
+            <span
+              className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                isOnline ? "bg-emerald-100 text-emerald-700" : "bg-lime-100 text-lime-700"
+              }`}
+            >
+              {isOnline ? "Online" : "Offline"}
+            </span>
+          </div>
+        </div>
+
+        {/* Tombol panah — indikator bisa diklik */}
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-stone-100 transition-colors group-hover:bg-emerald-600">
+          <ArrowRight className="h-4 w-4 text-stone-500 transition-colors group-hover:text-white" />
+        </div>
+      </Link>
+    </motion.div>
+  );
+}
+
+// ─── PublicProfileContent ─────────────────────────────────────────────────────
 
 export function PublicProfileContent({ username, user, isOwner }: PublicProfileContentProps) {
   const displayName = user.name ?? username;
 
   return (
     <div className="min-h-screen bg-stone-50">
-      {/* ─── Banner Owner ──────────────────────────────────────────────────────
-          Hanya muncul jika yang membuka halaman adalah pemilik profil.
-          Memberi tahu host bahwa ini adalah tampilan publik yang dilihat tamu,
-          sekaligus menyediakan jalan kembali ke dashboard. */}
+
+      {/* ─── Banner Owner ─────────────────────────────────────────────────────
+          Muncul jika host membuka halamannya sendiri — beri tahu bahwa ini
+          tampilan yang dilihat tamu, bukan halaman dashboard. */}
       {isOwner && (
         <div className="border-b border-emerald-200 bg-emerald-50 px-4 py-2.5">
-          <div className="mx-auto flex max-w-3xl items-center justify-between gap-3">
+          <div className="mx-auto flex max-w-xl items-center justify-between gap-3">
             <div className="flex items-center gap-2 text-sm text-emerald-700">
               <Eye className="h-4 w-4 shrink-0" />
-              <span>Ini adalah tampilan publik halamanmu — seperti yang dilihat oleh tamu.</span>
+              <span className="hidden sm:inline">Ini tampilan publik yang dilihat tamumu.</span>
+              <span className="sm:hidden">Tampilan publik</span>
             </div>
             <Link
               href="/dashboard"
-              className="flex shrink-0 items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5
-                         text-xs font-semibold text-white transition-colors hover:bg-emerald-700"
+              className="tap-scale flex shrink-0 items-center gap-1.5 rounded-xl bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700"
             >
               <ArrowLeft className="h-3.5 w-3.5" />
               Dashboard
@@ -99,78 +154,75 @@ export function PublicProfileContent({ username, user, isOwner }: PublicProfileC
         </div>
       )}
 
-      <main className="px-4 py-10 sm:px-6">
-      <div className="mx-auto w-full max-w-3xl space-y-8">
-        <motion.section
-          variants={headerVariants}
-          initial="hidden"
-          animate="visible"
-          className="rounded-2xl border border-stone-200 bg-white p-6 text-center shadow-sm sm:p-8"
-        >
-          <div className="mx-auto mb-4 flex justify-center">
-            <Avatar className="h-24 w-24">
-              <AvatarImage src={user.image ?? undefined} alt={displayName} />
-              <AvatarFallback className="bg-emerald-100 text-2xl font-semibold text-emerald-700">
-                {getInitials(displayName)}
-              </AvatarFallback>
-            </Avatar>
-          </div>
-          <h1 className="text-3xl font-bold tracking-tight text-stone-900">{displayName}</h1>
-          {/* Deskripsi dalam bahasa Indonesia sebagai teks default */}
-          <p className="mx-auto mt-3 max-w-xl leading-relaxed text-stone-500">
-            Pilih jenis pertemuan di bawah dan tentukan waktu yang paling cocok untukmu.
-          </p>
-        </motion.section>
+      <main className="mx-auto max-w-xl px-4 pb-16 pt-6">
 
-        <motion.section
-          variants={listVariants}
-          initial="hidden"
-          animate="visible"
-          className="grid gap-4"
+        {/* ─── Header Profil Host ────────────────────────────────────────────
+            Gradient latar sebagai "cover", avatar, nama.
+            Dibuat seperti halaman profil app — bukan kartu biasa. */}
+        <motion.div
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+          className="mb-6 overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm"
         >
-          {user.eventTypes.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-stone-300 bg-white p-8 text-center shadow-sm">
-              <p className="text-lg font-semibold text-stone-900">Belum ada event aktif.</p>
-              <p className="mt-2 text-stone-500">Silakan cek kembali nanti.</p>
+          {/* Cover gradient: warna brand emerald sebagai aksen visual */}
+          <div className="h-20 bg-linear-to-br from-emerald-500 via-emerald-600 to-emerald-700" />
+
+          {/* Avatar: menimpa cover dengan margin negatif */}
+          <div className="px-5 pb-5">
+            <div className="-mt-10 mb-4">
+              <Avatar className="h-20 w-20 border-4 border-white shadow-md">
+                <AvatarImage src={user.image ?? undefined} alt={displayName} />
+                <AvatarFallback className="bg-emerald-100 text-2xl font-bold text-emerald-700">
+                  {getInitials(displayName)}
+                </AvatarFallback>
+              </Avatar>
             </div>
+
+            <h1 className="text-xl font-bold text-stone-900">{displayName}</h1>
+            <p className="mt-1 text-sm leading-relaxed text-stone-500">
+              Pilih jenis pertemuan di bawah dan tentukan waktu yang cocok untukmu.
+            </p>
+          </div>
+        </motion.div>
+
+        {/* ─── Section Pilih Layanan ─────────────────────────────────────────
+            Daftar event type yang bisa dipesan tamu.
+            Animasi stagger: kartu muncul satu per satu. */}
+        <div className="mb-4">
+          <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-stone-400">
+            Pilih Layanan
+          </p>
+
+          {user.eventTypes.length === 0 ? (
+            // Empty state: host belum punya event aktif
+            <EmptyState
+              icon={<Video className="h-10 w-10 text-stone-300" />}
+              title="Belum ada layanan tersedia"
+              description="Host belum menambahkan jadwal yang bisa dipesan. Coba cek kembali nanti."
+            />
           ) : (
-            user.eventTypes.map((eventType) => (
-              <motion.div key={eventType.id} variants={itemVariants}>
-                <Link href={`/${username}/${eventType.id}`} className="block">
-                  <Card className="border-stone-200 bg-white shadow-sm transition-all hover:border-emerald-200 hover:shadow-md">
-                    <CardHeader className="space-y-2">
-                      <CardTitle className="text-xl text-stone-900">{eventType.title}</CardTitle>
-                      <p className="leading-relaxed text-stone-500">
-                        {eventType.description || "Pilih waktu terbaik Anda untuk bertemu."}
-                      </p>
-                    </CardHeader>
-                    <CardContent className="flex flex-wrap items-center gap-3">
-                      <span className="inline-flex items-center gap-2 rounded-full bg-stone-100 px-3 py-1 text-xs font-medium text-stone-700">
-                        <Clock3 className="h-4 w-4" />
-                        {eventType.duration} menit
-                      </span>
-                      <span
-                        className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-medium ${
-                          eventType.locationType === "ONLINE"
-                            ? "bg-emerald-100 text-emerald-700"
-                            : "bg-lime-100 text-lime-700"
-                        }`}
-                      >
-                        {eventType.locationType === "ONLINE" ? (
-                          <Video className="h-4 w-4" />
-                        ) : (
-                          <MapPin className="h-4 w-4" />
-                        )}
-                        {eventType.locationType === "ONLINE" ? "Online" : "Offline"}
-                      </span>
-                    </CardContent>
-                  </Card>
-                </Link>
-              </motion.div>
-            ))
+            <motion.div
+              variants={stagger}
+              initial="hidden"
+              animate="visible"
+              className="space-y-3"
+            >
+              {user.eventTypes.map((event) => (
+                <EventCard key={event.id} event={event} username={username} />
+              ))}
+            </motion.div>
           )}
-        </motion.section>
-      </div>
+        </div>
+
+        {/* ─── Footer ───────────────────────────────────────────────────────
+            Atribusi JanjiLink — ditampilkan di semua halaman publik. */}
+        <p className="mt-10 text-center text-xs text-stone-400">
+          Dibuat dengan{" "}
+          <Link href="/" className="font-medium text-emerald-600 hover:underline">
+            JanjiLink
+          </Link>
+        </p>
       </main>
     </div>
   );
