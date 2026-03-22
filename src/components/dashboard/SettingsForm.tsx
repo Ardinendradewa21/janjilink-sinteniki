@@ -14,13 +14,15 @@ type SettingsFormProps = {
   name: string;
   email: string;
   slug: string;
+  // Nomor WA host (opsional) — ditampilkan di halaman konfirmasi booking tamu
+  waNumber: string | null;
 };
 
 // ─── SettingsForm ────────────────────────────────────────────────────────────
 // Form client component untuk mengedit profil user (nama + slug/username).
 // Menggunakan useActionState (React 19) agar error/success langsung tampil.
 // Email ditampilkan read-only karena tidak bisa diubah.
-export function SettingsForm({ name, email, slug }: SettingsFormProps) {
+export function SettingsForm({ name, email, slug, waNumber }: SettingsFormProps) {
   const [state, formAction, isPending] = useActionState(updateProfile, null);
 
   // Ref untuk melacak apakah sudah pernah menampilkan toast (hindari duplikat)
@@ -100,6 +102,31 @@ export function SettingsForm({ name, email, slug }: SettingsFormProps) {
         </div>
         <p className="mt-1 text-xs text-stone-400">
           Huruf kecil, angka, dan strip (-). Contoh: budi-pratama
+        </p>
+      </div>
+
+      {/* Input nomor WhatsApp (opsional)
+          Nomor ini akan muncul sebagai tombol "Hubungi via WA" di halaman
+          konfirmasi booking tamu. Jika dikosongkan, tombol tidak ditampilkan. */}
+      <div>
+        <label htmlFor="waNumber" className="mb-1.5 block text-sm font-medium text-stone-700">
+          Nomor WhatsApp <span className="text-stone-400">(opsional)</span>
+        </label>
+        <div className="flex items-center gap-2">
+          <span className="shrink-0 text-sm text-stone-400">+62</span>
+          <Input
+            id="waNumber"
+            name="waNumber"
+            type="tel"
+            defaultValue={waNumber ?? ""}
+            disabled={isPending}
+            placeholder="81234567890"
+            className="border-stone-200 focus-visible:ring-emerald-500"
+          />
+        </div>
+        <p className="mt-1 text-xs text-stone-400">
+          Ditampilkan sebagai tombol WA di halaman konfirmasi booking tamu.
+          Isi tanpa awalan 0 atau +62, contoh: 81234567890
         </p>
       </div>
 

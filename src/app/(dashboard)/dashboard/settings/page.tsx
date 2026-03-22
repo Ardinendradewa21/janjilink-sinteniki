@@ -31,7 +31,12 @@ export default async function SettingsPage() {
 
       {/* Form profil — client component dengan useActionState */}
       <div className="max-w-lg rounded-xl border border-stone-200 bg-white p-6 shadow-sm">
-        <SettingsForm name={user.name} email={user.email} slug={user.slug} />
+        <SettingsForm
+          name={user.name}
+          email={user.email}
+          slug={user.slug}
+          waNumber={user.waNumber ?? null}
+        />
       </div>
     </section>
   );

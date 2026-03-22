@@ -24,6 +24,10 @@ model User {
   // Menandai apakah user sudah menyelesaikan wizard onboarding (profil + availability + event pertama).
   // Default false agar user baru diarahkan ke /onboarding sebelum masuk dashboard.
   onboardingCompleted Boolean @default(false)
+  // Nomor WhatsApp host (opsional). Ditampilkan sebagai deep link wa.me/[nomor]
+  // di halaman konfirmasi booking agar tamu bisa langsung menghubungi host via WA.
+  // Format bebas — strip dan spasi akan dihapus saat membuat link.
+  waNumber            String?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 

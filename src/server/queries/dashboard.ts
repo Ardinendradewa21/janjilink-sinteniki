@@ -67,6 +67,8 @@ export async function getSettingsData(userId: string) {
       name: true,
       email: true,
       slug: true,
+      // Nomor WA host — opsional, ditampilkan di form pengaturan
+      waNumber: true,
     },
   });
 }

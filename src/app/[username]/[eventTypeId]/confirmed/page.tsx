@@ -1,4 +1,4 @@
-import { CalendarCheck, Clock3, MapPin, Video } from "lucide-react";
+import { CalendarCheck, Clock3, MapPin, MessageCircle, Video } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import prisma from "@/lib/prisma";
@@ -65,7 +65,8 @@ export default async function ConfirmedPage({ params, searchParams }: ConfirmedP
           platform: true,
           locationDetails: true,
           user: {
-            select: { name: true },
+            // Ambil juga waNumber untuk tombol deep link WA
+            select: { name: true, waNumber: true },
           },
         },
       },
@@ -184,8 +185,40 @@ export default async function ConfirmedPage({ params, searchParams }: ConfirmedP
           </div>
         </div>
 
-        {/* Tombol kembali ke profil */}
-        <div className="mt-6 text-center">
+        {/* Tombol aksi: WA deep link + kembali ke profil
+            Tombol WA hanya tampil jika host mengisi nomor WA di pengaturan profil.
+            Deep link wa.me akan membuka WhatsApp langsung ke chat dengan host,
+            dengan pesan yang sudah terisi otomatis (tamu tinggal kirim).
+            Format nomor: hilangkan semua non-digit, lalu tambah prefix 62 jika belum ada. */}
+        <div className="mt-6 flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
+          {booking.eventType.user.waNumber && (() => {
+            // Bersihkan nomor: hapus non-digit, ganti awalan 0 dengan 62
+            const digits = booking.eventType.user.waNumber.replace(/\D/g, "");
+            const normalized = digits.startsWith("0")
+              ? "62" + digits.slice(1)
+              : digits.startsWith("62")
+              ? digits
+              : "62" + digits;
+
+            // Pesan WA yang sudah terisi otomatis — tamu tinggal kirim
+            const waText = encodeURIComponent(
+              `Halo ${booking.eventType.user.name ?? username}, saya ${booking.inviteeName}. Saya sudah booking "${booking.eventType.title}" pada ${day}, ${dateStr} pukul ${time} WIB. Mohon konfirmasinya ya!`
+            );
+
+            return (
+              <Button asChild className="gap-2 bg-emerald-600 text-white hover:bg-emerald-700">
+                <a
+                  href={`https://wa.me/${normalized}?text=${waText}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <MessageCircle className="h-4 w-4" />
+                  Hubungi Host via WhatsApp
+                </a>
+              </Button>
+            );
+          })()}
+
           <Button asChild variant="outline" className="border-stone-200">
             <Link href={`/${username}`}>Kembali ke profil</Link>
           </Button>

@@ -35,6 +35,10 @@ export async function updateProfile(
   // Baca dan bersihkan input dari form
   const name = (formData.get("name") as string | null)?.trim() ?? "";
   const slug = (formData.get("slug") as string | null)?.trim().toLowerCase() ?? "";
+  // Nomor WA: hapus semua karakter selain angka dan + di awal agar konsisten
+  const waRaw = (formData.get("waNumber") as string | null)?.trim() ?? "";
+  // Simpan as-is (termasuk kosong = hapus nomor WA lama)
+  const waNumber = waRaw.length > 0 ? waRaw : null;
 
   // Validasi nama: minimal 2 karakter agar tidak kosong/absurd
   if (name.length < 2) return { error: "Nama minimal 2 karakter." };
@@ -55,10 +59,10 @@ export async function updateProfile(
 
   if (existing) return { error: "Username sudah dipakai oleh pengguna lain." };
 
-  // Simpan perubahan nama dan slug ke database
+  // Simpan perubahan nama, slug, dan nomor WA ke database
   await prisma.user.update({
     where: { id: userId },
-    data: { name, slug },
+    data: { name, slug, waNumber },
   });
 
   // Refresh cache halaman dashboard agar data terbaru langsung muncul
