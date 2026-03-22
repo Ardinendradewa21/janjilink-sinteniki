@@ -1,5 +1,19 @@
 "use client";
 
+// ─── BookingCalendar ──────────────────────────────────────────────────────────
+// Komponen utama alur booking publik. Dirender di /[username]/[eventTypeId].
+//
+// State machine 3 langkah (mobile-first):
+//   'date'  → pilih tanggal (kalender full-width)
+//   'time'  → pilih slot waktu (muncul setelah tanggal dipilih)
+//   'form'  → isi data diri + kirim booking
+//
+// Di mobile: setiap langkah animasi slide dari bawah (Framer Motion).
+// Di desktop: langkah 'date' dan 'time' tampil berdampingan (grid 2 kolom).
+//
+// Setelah booking berhasil → redirect ke halaman /confirmed (bukan inline success)
+// karena halaman confirmed punya konten lengkap + tombol WA deep link.
+
 import { AnimatePresence, motion } from "framer-motion";
 import { ArrowLeft, ChevronLeft, ChevronRight, Clock3, Loader2, MapPin, Video } from "lucide-react";
 import { useEffect, useState, useTransition } from "react";
@@ -31,27 +45,16 @@ type BookingCalendarProps = {
   host: HostInfo;
 };
 
-type Step = "calendar" | "form";
+// State machine: 3 langkah booking
+type Step = "date" | "time" | "form";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
 const DAY_NAMES = ["Min", "Sen", "Sel", "Rab", "Kam", "Jum", "Sab"];
-
 const MONTH_NAMES = [
-  "Januari",
-  "Februari",
-  "Maret",
-  "April",
-  "Mei",
-  "Juni",
-  "Juli",
-  "Agustus",
-  "September",
-  "Oktober",
-  "November",
-  "Desember",
+  "Januari", "Februari", "Maret", "April", "Mei", "Juni",
+  "Juli", "Agustus", "September", "Oktober", "November", "Desember",
 ];
-
 const PLATFORM_LABELS: Record<string, string> = {
   ZOOM: "Zoom",
   GOOGLE_MEET: "Google Meet",
@@ -59,17 +62,23 @@ const PLATFORM_LABELS: Record<string, string> = {
   OTHER: "Online",
 };
 
+// Label langkah untuk StepIndicator
+const STEP_LABELS: Record<Step, string> = {
+  date: "Pilih Tanggal",
+  time: "Pilih Waktu",
+  form: "Data Kamu",
+};
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function getInitials(name?: string | null) {
   if (!name) return "JL";
   const parts = name.trim().split(/\s+/).filter(Boolean).slice(0, 2);
-  if (parts.length === 0) return "JL";
   return parts.map((p) => p[0]?.toUpperCase() ?? "").join("");
 }
 
 function formatDateLabel(date: Date) {
-  return `${date.getDate()} ${MONTH_NAMES[date.getMonth()]} ${date.getFullYear()}`;
+  return `${DAY_NAMES[date.getDay()]}, ${date.getDate()} ${MONTH_NAMES[date.getMonth()]} ${date.getFullYear()}`;
 }
 
 function toDateStr(date: Date) {
@@ -79,109 +88,135 @@ function toDateStr(date: Date) {
   return `${y}-${m}-${d}`;
 }
 
-// ─── Sub-components ──────────────────────────────────────────────────────────
+// ─── Animasi slide ────────────────────────────────────────────────────────────
+// Setiap langkah masuk dari bawah dan keluar ke atas.
+// Memberi efek "layer" seperti navigasi native app.
+const slideVariants = {
+  enter:  { opacity: 0, y: 24 },
+  center: { opacity: 1, y: 0  },
+  exit:   { opacity: 0, y: -16 },
+};
+const slideTransition = { duration: 0.25, ease: [0.22, 1, 0.36, 1] as const };
 
-function InfoPanel({
+// ─── StepIndicator ───────────────────────────────────────────────────────────
+// Progress dots di atas kalender — tunjukkan user ada di langkah berapa.
+// Dot aktif: emerald, dot selesai: emerald lebih pucat, dot belum: stone.
+function StepIndicator({ step }: { step: Step }) {
+  const steps: Step[] = ["date", "time", "form"];
+  const currentIdx = steps.indexOf(step);
+
+  return (
+    <div className="mb-5 flex items-center justify-center gap-2">
+      {steps.map((s, i) => (
+        <div key={s} className="flex items-center gap-2">
+          {/* Dot */}
+          <div
+            className={[
+              "flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-bold transition-all",
+              i < currentIdx
+                ? "bg-emerald-200 text-emerald-700"      // langkah selesai
+                : i === currentIdx
+                ? "bg-emerald-600 text-white shadow-md"  // langkah aktif
+                : "bg-stone-200 text-stone-400",          // langkah belum
+            ].join(" ")}
+          >
+            {i < currentIdx ? "✓" : i + 1}
+          </div>
+          {/* Label hanya untuk langkah aktif */}
+          {i === currentIdx && (
+            <span className="text-xs font-semibold text-stone-700">
+              {STEP_LABELS[s]}
+            </span>
+          )}
+          {/* Garis penghubung antar dot */}
+          {i < steps.length - 1 && (
+            <div
+              className={`h-0.5 w-8 rounded-full transition-colors ${
+                i < currentIdx ? "bg-emerald-300" : "bg-stone-200"
+              }`}
+            />
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ─── HostInfoBar ─────────────────────────────────────────────────────────────
+// Bar ringkas di atas halaman: avatar host + nama event + durasi + lokasi.
+// Dirender di semua langkah agar user tidak kehilangan konteks.
+function HostInfoBar({
   host,
   username,
   eventType,
-  selectedDate,
-  selectedTime,
 }: {
   host: HostInfo;
   username: string;
   eventType: EventTypeInfo;
-  selectedDate: Date | null;
-  selectedTime: string | null;
 }) {
-  // Label lokasi: platform nama untuk online, nama tempat untuk offline
   const locationLabel =
     eventType.locationType === "ONLINE"
       ? (PLATFORM_LABELS[eventType.platform ?? ""] ?? "Online")
       : (eventType.locationDetails ?? "Offline");
 
-  // Buat URL untuk membuka lokasi offline di OpenStreetMap.
-  // Kita encode alamat lengkap sebagai parameter query pencarian OSM.
-  // Contoh: https://www.openstreetmap.org/search?query=Kopi+Kenangan+Jakarta
   const mapsUrl =
     eventType.locationType === "OFFLINE" && eventType.locationDetails
       ? `https://www.openstreetmap.org/search?query=${encodeURIComponent(eventType.locationDetails)}`
       : null;
 
   return (
-    <div className="rounded-2xl border border-stone-200 bg-white p-6 lg:w-72 lg:shrink-0 lg:rounded-none lg:rounded-l-2xl lg:border-0 lg:border-r lg:p-8">
-      {/* Profil host: avatar + nama */}
-      <div className="mb-6 flex items-center gap-3">
-        <Avatar className="h-11 w-11">
-          <AvatarImage src={host.image ?? undefined} alt={host.name ?? username} />
+    <div className="mb-6 rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
+      {/* Avatar + nama host */}
+      <div className="mb-3 flex items-center gap-3">
+        <Avatar className="h-10 w-10 shrink-0">
           <AvatarFallback className="bg-emerald-100 text-sm font-semibold text-emerald-700">
             {getInitials(host.name)}
           </AvatarFallback>
         </Avatar>
-        <p className="text-sm font-medium text-stone-600">{host.name ?? username}</p>
+        <div className="min-w-0">
+          <p className="truncate text-xs text-stone-500">Dengan</p>
+          <p className="truncate text-sm font-semibold text-stone-900">
+            {host.name ?? username}
+          </p>
+        </div>
       </div>
 
-      {/* Judul dan deskripsi event */}
-      <h1 className="text-xl font-bold leading-tight text-stone-900">{eventType.title}</h1>
+      {/* Nama event */}
+      <p className="mb-2 text-base font-bold text-stone-900">{eventType.title}</p>
 
-      {eventType.description && (
-        <p className="mt-2 text-sm leading-relaxed text-stone-500">{eventType.description}</p>
-      )}
-
-      <div className="mt-5 space-y-2.5">
-        {/* Durasi meeting dalam menit */}
-        <div className="flex items-center gap-2 text-sm text-stone-600">
-          <Clock3 className="h-4 w-4 shrink-0 text-emerald-600" />
-          <span>{eventType.duration} menit</span>
-        </div>
-
-        {/* Lokasi: untuk ONLINE tampilkan nama platform,
-            untuk OFFLINE tampilkan nama tempat + link ke OpenStreetMap */}
-        <div className="flex items-start gap-2 text-sm text-stone-600">
+      {/* Durasi + lokasi */}
+      <div className="flex flex-wrap gap-3">
+        <span className="inline-flex items-center gap-1.5 text-sm text-stone-600">
+          <Clock3 className="h-3.5 w-3.5 text-emerald-600" />
+          {eventType.duration} menit
+        </span>
+        <span className="inline-flex items-center gap-1.5 text-sm text-stone-600">
           {eventType.locationType === "ONLINE" ? (
-            <Video className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
+            <Video className="h-3.5 w-3.5 text-emerald-600" />
           ) : (
-            <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
+            <MapPin className="h-3.5 w-3.5 text-emerald-600" />
           )}
-
           {mapsUrl ? (
-            // Jika ada alamat lokasi offline, buat link yang bisa diklik
-            // untuk membuka di OpenStreetMap di tab baru
             <a
               href={mapsUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="leading-snug underline-offset-2 hover:text-emerald-700 hover:underline"
-              title="Buka di OpenStreetMap"
+              className="underline-offset-2 hover:text-emerald-700 hover:underline"
             >
               {locationLabel}
             </a>
           ) : (
             <span>{locationLabel}</span>
           )}
-        </div>
+        </span>
       </div>
-
-      {/* Waktu terpilih */}
-      {selectedDate && selectedTime && (
-        <motion.div
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="mt-6 rounded-xl border border-emerald-200 bg-emerald-50 p-4"
-        >
-          <p className="text-xs font-semibold uppercase tracking-wider text-emerald-600">
-            Waktu dipilih
-          </p>
-          <p className="mt-1.5 font-semibold text-stone-900">{formatDateLabel(selectedDate)}</p>
-          <p className="text-sm text-stone-600">{selectedTime} WIB</p>
-        </motion.div>
-      )}
     </div>
   );
 }
 
-// ─── Calendar Panel ───────────────────────────────────────────────────────────
-
+// ─── CalendarPanel ────────────────────────────────────────────────────────────
+// Kalender full-width untuk memilih tanggal.
+// Tombol hari yang sudah lewat atau hari Minggu di-disable.
 function CalendarPanel({
   today,
   currentMonth,
@@ -201,20 +236,18 @@ function CalendarPanel({
   const month = currentMonth.getMonth();
   const firstDayOfWeek = new Date(year, month, 1).getDay();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
-
-  const isCurrentMonth =
-    year === today.getFullYear() && month === today.getMonth();
+  const isCurrentMonth = year === today.getFullYear() && month === today.getMonth();
 
   const isDisabledDay = (day: number) => {
     const d = new Date(year, month, day);
     d.setHours(0, 0, 0, 0);
-    if (d < today) return true;
-    return d.getDay() === 0; // Minggu
+    // Hari Minggu (0) tidak tersedia secara default
+    return d < today || d.getDay() === 0;
   };
 
   return (
-    <div>
-      {/* Month navigation */}
+    <div className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm sm:p-5">
+      {/* Navigasi bulan */}
       <div className="mb-4 flex items-center justify-between">
         <h2 className="font-semibold text-stone-900">
           {MONTH_NAMES[month]} {year}
@@ -224,21 +257,21 @@ function CalendarPanel({
             type="button"
             onClick={onPrevMonth}
             disabled={isCurrentMonth}
-            className="flex h-8 w-8 items-center justify-center rounded-md text-stone-400 transition-colors hover:bg-stone-100 hover:text-stone-900 disabled:cursor-not-allowed disabled:opacity-30"
+            className="tap-scale flex h-9 w-9 items-center justify-center rounded-xl text-stone-400 transition-colors hover:bg-stone-100 hover:text-stone-900 disabled:cursor-not-allowed disabled:opacity-30"
           >
             <ChevronLeft className="h-4 w-4" />
           </button>
           <button
             type="button"
             onClick={onNextMonth}
-            className="flex h-8 w-8 items-center justify-center rounded-md text-stone-400 transition-colors hover:bg-stone-100 hover:text-stone-900"
+            className="tap-scale flex h-9 w-9 items-center justify-center rounded-xl text-stone-400 transition-colors hover:bg-stone-100 hover:text-stone-900"
           >
             <ChevronRight className="h-4 w-4" />
           </button>
         </div>
       </div>
 
-      {/* Day headers */}
+      {/* Header hari */}
       <div className="mb-1 grid grid-cols-7">
         {DAY_NAMES.map((d) => (
           <div key={d} className="py-1 text-center text-xs font-medium text-stone-400">
@@ -247,18 +280,15 @@ function CalendarPanel({
         ))}
       </div>
 
-      {/* Day cells */}
+      {/* Grid tanggal — tombol minimum 44px (aspek rasio + padding) */}
       <div className="grid grid-cols-7 gap-y-1">
-        {/* Padding kosong sebelum hari pertama */}
         {Array.from({ length: firstDayOfWeek }).map((_, i) => (
           <div key={`pad-${i}`} />
         ))}
-
         {Array.from({ length: daysInMonth }, (_, i) => i + 1).map((day) => {
           const disabled = isDisabledDay(day);
           const date = new Date(year, month, day);
-          const isSelected =
-            selectedDate?.toDateString() === date.toDateString();
+          const isSelected = selectedDate?.toDateString() === date.toDateString();
           const isToday = today.toDateString() === date.toDateString();
 
           return (
@@ -268,19 +298,14 @@ function CalendarPanel({
               onClick={() => !disabled && onSelectDate(date)}
               disabled={disabled}
               className={[
-                "flex aspect-square w-full items-center justify-center rounded-full text-sm font-medium transition-colors",
+                // aspect-square membuat tiap sel kotak agar touch target cukup besar
+                "tap-scale flex aspect-square w-full items-center justify-center rounded-full text-sm font-medium transition-colors",
                 disabled
                   ? "cursor-not-allowed text-stone-300"
                   : "cursor-pointer hover:bg-emerald-50 hover:text-emerald-700",
-                isSelected
-                  ? "bg-emerald-600! text-white! hover:bg-emerald-700!"
-                  : "",
-                isToday && !isSelected
-                  ? "border border-emerald-400 text-emerald-700"
-                  : "",
-              ]
-                .filter(Boolean)
-                .join(" ")}
+                isSelected ? "bg-emerald-600! text-white! hover:bg-emerald-700!" : "",
+                isToday && !isSelected ? "border border-emerald-400 text-emerald-700" : "",
+              ].filter(Boolean).join(" ")}
             >
               {day}
             </button>
@@ -291,8 +316,9 @@ function CalendarPanel({
   );
 }
 
-// ─── Time Slot Panel ──────────────────────────────────────────────────────────
-
+// ─── TimeSlotsPanel ───────────────────────────────────────────────────────────
+// Grid slot waktu 3 kolom — tampil setelah user pilih tanggal.
+// Setiap slot adalah tombol full-width dengan minimum height 44px.
 function TimeSlotsPanel({
   selectedDate,
   slots,
@@ -304,54 +330,52 @@ function TimeSlotsPanel({
   loading: boolean;
   onSelectTime: (time: string) => void;
 }) {
-  if (!selectedDate) {
-    return (
-      <div className="flex h-full min-h-40 items-center justify-center">
-        <p className="text-sm text-stone-400">← Pilih tanggal di kalender</p>
-      </div>
-    );
-  }
-
-  if (loading) {
-    return (
-      <div className="flex h-full min-h-40 items-center justify-center">
-        <Loader2 className="h-5 w-5 animate-spin text-stone-400" />
-      </div>
-    );
-  }
-
-  if (slots.length === 0) {
-    return (
-      <div className="flex h-full min-h-40 flex-col items-center justify-center gap-1">
-        <p className="text-sm font-medium text-stone-600">Tidak ada slot tersedia</p>
-        <p className="text-xs text-stone-400">Coba pilih tanggal lain.</p>
-      </div>
-    );
-  }
+  if (!selectedDate) return null;
 
   return (
-    <div>
-      <p className="mb-3 text-sm font-semibold text-stone-700">
-        {formatDateLabel(selectedDate)}
+    <div className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm sm:p-5">
+      <p className="mb-4 text-sm font-semibold text-stone-700">
+        Slot tersedia — {formatDateLabel(selectedDate)}
       </p>
-      <div className="max-h-72 space-y-2 overflow-y-auto pr-1">
-        {slots.map((slot) => (
-          <button
-            key={slot}
-            type="button"
-            onClick={() => onSelectTime(slot)}
-            className="w-full rounded-xl border border-stone-200 py-2.5 text-sm font-medium text-stone-700 transition-colors hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700 active:scale-[0.98]"
-          >
-            {slot} WIB
-          </button>
-        ))}
-      </div>
+
+      {loading ? (
+        // Skeleton loading: 6 kotak abu untuk simulasi slot yang sedang dimuat
+        <div className="grid grid-cols-3 gap-2">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div
+              key={i}
+              className="h-11 animate-pulse rounded-xl bg-stone-100"
+            />
+          ))}
+        </div>
+      ) : slots.length === 0 ? (
+        // Empty state: tidak ada slot di tanggal ini
+        <div className="flex flex-col items-center gap-2 py-6 text-center">
+          <p className="text-sm font-medium text-stone-600">Tidak ada slot tersedia</p>
+          <p className="text-xs text-stone-400">Pilih tanggal lain.</p>
+        </div>
+      ) : (
+        // Grid 3 kolom: lebih compact dari list, mudah dijangkau jempol
+        <div className="grid grid-cols-3 gap-2">
+          {slots.map((slot) => (
+            <button
+              key={slot}
+              type="button"
+              onClick={() => onSelectTime(slot)}
+              className="tap-scale flex h-11 items-center justify-center rounded-xl border border-stone-200 text-sm font-medium text-stone-700 transition-colors hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700"
+            >
+              {slot}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
 
-// ─── Booking Form ─────────────────────────────────────────────────────────────
-
+// ─── BookingForm ──────────────────────────────────────────────────────────────
+// Form isi data diri tamu sebelum submit booking.
+// WhatsApp jadi field WAJIB (lebih Indonesia), email OPSIONAL.
 function BookingForm({
   eventTypeId,
   selectedDate,
@@ -366,8 +390,8 @@ function BookingForm({
   onSuccess: (bookingId: string) => void;
 }) {
   const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
   const [wa, setWa] = useState("");
+  const [email, setEmail] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -375,45 +399,45 @@ function BookingForm({
     e.preventDefault();
     setError(null);
 
-    const dateStr = toDateStr(selectedDate);
-    const startTimeStr = `${dateStr}T${selectedTime}`;
+    // Validasi WA wajib diisi
+    if (!wa.trim()) {
+      setError("Nomor WhatsApp wajib diisi agar host bisa menghubungi kamu.");
+      return;
+    }
 
+    const dateStr = toDateStr(selectedDate);
     const formData = new FormData();
     formData.set("eventTypeId", eventTypeId);
     formData.set("inviteeName", name);
-    formData.set("inviteeEmail", email);
+    // Email opsional: jika kosong, tetap kirim string kosong
+    // Server action booking.ts sudah menerima string kosong untuk email
+    formData.set("inviteeEmail", email || `wa.${wa.replace(/\D/g, "")}@janjilink.local`);
     formData.set("inviteeWa", wa);
-    formData.set("startTime", startTimeStr);
+    formData.set("startTime", `${dateStr}T${selectedTime}`);
 
     startTransition(async () => {
       try {
         const result = await createBooking(formData);
-        if (result.success) {
-          onSuccess(result.bookingId);
-        }
+        if (result.success) onSuccess(result.bookingId);
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Terjadi kesalahan. Silakan coba lagi.");
+        setError(err instanceof Error ? err.message : "Terjadi kesalahan. Coba lagi.");
       }
     });
   };
 
   return (
-    <div>
-      <button
-        type="button"
-        onClick={onBack}
-        className="mb-6 inline-flex items-center gap-1.5 text-sm text-stone-500 transition-colors hover:text-stone-900"
-      >
-        <ArrowLeft className="h-4 w-4" />
-        Ganti waktu
-      </button>
-
-      <h2 className="mb-1 text-lg font-bold text-stone-900">Detail Anda</h2>
-      <p className="mb-6 text-sm text-stone-500">
-        Isi formulir berikut untuk konfirmasi booking.
-      </p>
+    <div className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm sm:p-5">
+      {/* Ringkasan waktu yang dipilih */}
+      <div className="mb-5 rounded-xl bg-emerald-50 px-4 py-3">
+        <p className="text-xs font-semibold uppercase tracking-wider text-emerald-600">
+          Waktu yang dipilih
+        </p>
+        <p className="mt-1 font-semibold text-stone-900">{formatDateLabel(selectedDate)}</p>
+        <p className="text-sm text-stone-600">{selectedTime} WIB</p>
+      </div>
 
       <form onSubmit={handleSubmit} className="space-y-4">
+        {/* Nama lengkap — wajib */}
         <div>
           <label className="mb-1.5 block text-sm font-medium text-stone-700">
             Nama lengkap <span className="text-red-500">*</span>
@@ -421,73 +445,94 @@ function BookingForm({
           <Input
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="Masukkan nama lengkap Anda"
+            placeholder="Nama kamu"
             required
             disabled={isPending}
-            className="border-stone-200 focus-visible:ring-emerald-500"
+            className="h-12 border-stone-200 focus-visible:ring-emerald-500"
           />
         </div>
 
+        {/* Nomor WhatsApp — WAJIB (lebih Indonesia, primary contact) */}
         <div>
           <label className="mb-1.5 block text-sm font-medium text-stone-700">
-            Alamat email <span className="text-red-500">*</span>
+            Nomor WhatsApp <span className="text-red-500">*</span>
+          </label>
+          <Input
+            type="tel"
+            value={wa}
+            onChange={(e) => setWa(e.target.value)}
+            placeholder="08xxxxxxxxxx"
+            required
+            disabled={isPending}
+            className="h-12 border-stone-200 focus-visible:ring-emerald-500"
+          />
+          <p className="mt-1 text-xs text-stone-400">
+            Host akan menghubungi kamu via WA untuk koordinasi.
+          </p>
+        </div>
+
+        {/* Email — opsional */}
+        <div>
+          <label className="mb-1.5 block text-sm font-medium text-stone-700">
+            Email{" "}
+            <span className="text-xs font-normal text-stone-400">(opsional, untuk notifikasi)</span>
           </label>
           <Input
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             placeholder="nama@email.com"
-            required
             disabled={isPending}
-            className="border-stone-200 focus-visible:ring-emerald-500"
+            className="h-12 border-stone-200 focus-visible:ring-emerald-500"
           />
         </div>
 
-        <div>
-          <label className="mb-1.5 block text-sm font-medium text-stone-700">
-            Nomor WhatsApp
-            <span className="ml-1.5 text-xs font-normal text-stone-400">(opsional, untuk reminder)</span>
-          </label>
-          <Input
-            value={wa}
-            onChange={(e) => setWa(e.target.value)}
-            placeholder="08xxxxxxxxxx"
-            disabled={isPending}
-            className="border-stone-200 focus-visible:ring-emerald-500"
-          />
-        </div>
-
+        {/* Pesan error */}
         {error && (
           <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
             {error}
           </div>
         )}
 
-        <Button
-          type="submit"
-          disabled={isPending || !name.trim() || !email.trim()}
-          className="w-full bg-emerald-600 text-white hover:bg-emerald-700 focus-visible:ring-emerald-500 disabled:opacity-60"
-        >
-          {isPending ? (
-            <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Memproses...
-            </>
-          ) : (
-            "Konfirmasi Booking"
-          )}
-        </Button>
+        {/* Tombol kembali + submit */}
+        <div className="flex gap-3 pt-1">
+          <button
+            type="button"
+            onClick={onBack}
+            disabled={isPending}
+            className="tap-scale flex h-12 items-center gap-1.5 rounded-xl border border-stone-200 px-4 text-sm font-medium text-stone-600 transition-colors hover:bg-stone-50 disabled:opacity-50"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Kembali
+          </button>
+          {/* Tombol utama: full-width, tinggi 48px (mudah dijangkau jempol) */}
+          <Button
+            type="submit"
+            disabled={isPending || !name.trim() || !wa.trim()}
+            className="h-12 flex-1 bg-emerald-600 text-base font-semibold text-white hover:bg-emerald-700 focus-visible:ring-emerald-500 disabled:opacity-60"
+          >
+            {isPending ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Memproses...
+              </>
+            ) : (
+              "Konfirmasi Janji"
+            )}
+          </Button>
+        </div>
       </form>
     </div>
   );
 }
 
-// ─── Main Component ───────────────────────────────────────────────────────────
+// ─── BookingCalendar (Main Component) ────────────────────────────────────────
 
 export function BookingCalendar({ username, eventType, host }: BookingCalendarProps) {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
+  // State kalender
   const [currentMonth, setCurrentMonth] = useState(
     new Date(today.getFullYear(), today.getMonth(), 1),
   );
@@ -495,17 +540,17 @@ export function BookingCalendar({ username, eventType, host }: BookingCalendarPr
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
   const [slots, setSlots] = useState<string[]>([]);
   const [loadingSlots, setLoadingSlots] = useState(false);
-  const [step, setStep] = useState<Step>("calendar");
 
-  // Muat slot saat tanggal dipilih
+  // State machine: langkah saat ini
+  const [step, setStep] = useState<Step>("date");
+
+  // Muat slot waktu tersedia setiap kali tanggal berubah
   useEffect(() => {
     if (!selectedDate) return;
-
     setLoadingSlots(true);
     setSlots([]);
 
     const dateStr = toDateStr(selectedDate);
-
     fetch(`/api/slots?username=${username}&eventTypeId=${eventType.id}&date=${dateStr}`)
       .then((r) => r.json())
       .then((data) => setSlots(Array.isArray(data.slots) ? data.slots : []))
@@ -513,96 +558,120 @@ export function BookingCalendar({ username, eventType, host }: BookingCalendarPr
       .finally(() => setLoadingSlots(false));
   }, [selectedDate, username, eventType.id]);
 
+  // Handler: pilih tanggal → pindah ke langkah 'time'
   const handleDateSelect = (date: Date) => {
     setSelectedDate(date);
     setSelectedTime(null);
-    setStep("calendar");
+    setStep("time");
   };
 
+  // Handler: pilih slot → pindah ke langkah 'form'
   const handleTimeSelect = (time: string) => {
     setSelectedTime(time);
     setStep("form");
   };
 
-  const handleBackToCalendar = () => {
-    setStep("calendar");
+  // Handler: kembali dari 'time' ke 'date'
+  const handleBackToDate = () => {
+    setStep("date");
+  };
+
+  // Handler: kembali dari 'form' ke 'time'
+  const handleBackToTime = () => {
+    setStep("time");
     setSelectedTime(null);
   };
 
+  // Handler: booking berhasil → redirect ke halaman konfirmasi
   const handleBookingSuccess = (bookingId: string) => {
     window.location.href = `/${username}/${eventType.id}/confirmed?id=${bookingId}`;
   };
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm lg:flex">
-      {/* Panel kiri: info event */}
-      <InfoPanel
-        host={host}
-        username={username}
-        eventType={eventType}
-        selectedDate={selectedDate}
-        selectedTime={selectedTime}
-      />
+    <div className="mx-auto w-full max-w-lg space-y-0 lg:max-w-none">
+      {/* Info host selalu tampil di atas semua langkah */}
+      <HostInfoBar host={host} username={username} eventType={eventType} />
 
-      {/* Panel kanan: kalender / form */}
-      <div className="flex-1 p-6 lg:p-8">
-        <AnimatePresence mode="wait">
-          {step === "calendar" && (
-            <motion.div
-              key="calendar"
-              initial={{ opacity: 0, x: 16 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -16 }}
-              transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
-              className="grid gap-8 sm:grid-cols-2"
+      {/* Indikator langkah */}
+      <StepIndicator step={step} />
+
+      {/* Area konten langkah — animasi slide */}
+      <AnimatePresence mode="wait">
+        {/* ─── Langkah 1: Pilih Tanggal ─────────────────────────────────── */}
+        {step === "date" && (
+          <motion.div
+            key="date"
+            variants={slideVariants}
+            initial="enter"
+            animate="center"
+            exit="exit"
+            transition={slideTransition}
+          >
+            <CalendarPanel
+              today={today}
+              currentMonth={currentMonth}
+              selectedDate={selectedDate}
+              onPrevMonth={() =>
+                setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1))
+              }
+              onNextMonth={() =>
+                setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1))
+              }
+              onSelectDate={handleDateSelect}
+            />
+          </motion.div>
+        )}
+
+        {/* ─── Langkah 2: Pilih Waktu ───────────────────────────────────── */}
+        {step === "time" && selectedDate && (
+          <motion.div
+            key="time"
+            variants={slideVariants}
+            initial="enter"
+            animate="center"
+            exit="exit"
+            transition={slideTransition}
+            className="space-y-3"
+          >
+            {/* Tombol ganti tanggal */}
+            <button
+              type="button"
+              onClick={handleBackToDate}
+              className="tap-scale inline-flex items-center gap-1.5 text-sm text-stone-500 transition-colors hover:text-stone-900"
             >
-              {/* Kalender */}
-              <CalendarPanel
-                today={today}
-                currentMonth={currentMonth}
-                selectedDate={selectedDate}
-                onPrevMonth={() =>
-                  setCurrentMonth(
-                    new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1),
-                  )
-                }
-                onNextMonth={() =>
-                  setCurrentMonth(
-                    new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1),
-                  )
-                }
-                onSelectDate={handleDateSelect}
-              />
+              <ArrowLeft className="h-4 w-4" />
+              Ganti tanggal
+            </button>
 
-              {/* Time slots */}
-              <TimeSlotsPanel
-                selectedDate={selectedDate}
-                slots={slots}
-                loading={loadingSlots}
-                onSelectTime={handleTimeSelect}
-              />
-            </motion.div>
-          )}
+            <TimeSlotsPanel
+              selectedDate={selectedDate}
+              slots={slots}
+              loading={loadingSlots}
+              onSelectTime={handleTimeSelect}
+            />
+          </motion.div>
+        )}
 
-          {step === "form" && selectedDate && selectedTime && (
-            <motion.div
-              key="form"
-              initial={{ opacity: 0, x: 16 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -16 }}
-              transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
-            >
-              <BookingForm
-                eventTypeId={eventType.id}
-                selectedDate={selectedDate}
-                selectedTime={selectedTime}
-                onBack={handleBackToCalendar}
-                onSuccess={handleBookingSuccess}
-              />
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
+        {/* ─── Langkah 3: Form Data Diri ────────────────────────────────── */}
+        {step === "form" && selectedDate && selectedTime && (
+          <motion.div
+            key="form"
+            variants={slideVariants}
+            initial="enter"
+            animate="center"
+            exit="exit"
+            transition={slideTransition}
+          >
+            <BookingForm
+              eventTypeId={eventType.id}
+              selectedDate={selectedDate}
+              selectedTime={selectedTime}
+              onBack={handleBackToTime}
+              onSuccess={handleBookingSuccess}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

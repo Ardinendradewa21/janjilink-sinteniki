@@ -120,8 +120,44 @@
 @layer base {
   * {
     @apply border-border outline-ring/50;
+    /* Hapus highlight biru/abu saat elemen di-tap di mobile.
+       Penting agar tombol dan link terasa seperti native app, bukan website. */
+    -webkit-tap-highlight-color: transparent;
   }
   body {
     @apply bg-background text-foreground;
+    /* Cegah over-scroll bounce (efek karet saat scroll melewati batas halaman).
+       Memberi kesan aplikasi native, bukan halaman web biasa. */
+    overscroll-behavior-y: contain;
   }
+}
+
+/* ─── Utility: Safe Area (notch & home indicator iPhone/Android) ─────────────
+   env(safe-area-inset-*) adalah CSS environment variable yang otomatis
+   menyesuaikan dengan ukuran notch kamera dan home indicator di HP modern.
+   Tanpa ini, konten bisa tertutup notch atau tombol home. */
+.safe-top    { padding-top: env(safe-area-inset-top); }
+.safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
+.safe-left   { padding-left: env(safe-area-inset-left); }
+.safe-right  { padding-right: env(safe-area-inset-right); }
+
+/* ─── Utility: Sembunyikan scrollbar tapi tetap scrollable ──────────────────
+   Dipakai untuk horizontal scroll chip/tab di mobile (overflow-x-auto)
+   agar tidak ada scrollbar yang mengganggu tampilan. */
+.scrollbar-none {
+  -ms-overflow-style: none;   /* Internet Explorer & Edge lama */
+  scrollbar-width: none;       /* Firefox */
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none; /* Chrome, Safari, Opera */
+}
+
+/* ─── Utility: Tap scale feedback ────────────────────────────────────────────
+   Simulasi haptic feedback via CSS — elemen sedikit mengecil saat ditekan.
+   Memberi kesan tombol "terasa" ditekan seperti aplikasi native. */
+.tap-scale {
+  transition: transform 0.1s ease;
+}
+.tap-scale:active {
+  transform: scale(0.96);
 }

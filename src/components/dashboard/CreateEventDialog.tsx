@@ -27,11 +27,22 @@ import { Textarea } from "@/components/ui/textarea";
 // ─── Tipe lokasi yang didukung ────────────────────────────────────────────────
 type LocationTypeValue = "ONLINE" | "OFFLINE";
 
+// ─── Props ────────────────────────────────────────────────────────────────────
+// open + onOpenChange bersifat opsional:
+//   - Jika tidak diisi → komponen mengelola state sendiri (uncontrolled mode)
+//     Contoh: dipakai langsung di halaman dashboard dengan DialogTrigger
+//   - Jika diisi → komponen dikontrol dari luar (controlled mode)
+//     Contoh: FAB di BottomTabBar membuka dialog ini dari luar komponen
+type CreateEventDialogProps = {
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+};
+
 // ─── CreateEventDialog ───────────────────────────────────────────────────────
 // Dialog untuk membuat event type baru dari dashboard host.
 //
 // Alur:
-// 1. User klik tombol "Create New Event" → dialog terbuka
+// 1. User klik tombol "Create New Event" (atau FAB) → dialog terbuka
 // 2. User isi form (judul, deskripsi, durasi, tipe lokasi, platform/lokasi)
 // 3. Submit → panggil server action createEventType(formData)
 // 4. Jika berhasil → dialog tutup + dashboard di-refresh (via revalidatePath)
@@ -39,14 +50,23 @@ type LocationTypeValue = "ONLINE" | "OFFLINE";
 //
 // Komponen ini menggunakan useTransition untuk mencegah UI freeze saat menunggu
 // respons server action (operasi async ke database Prisma).
-export function CreateEventDialog() {
+export function CreateEventDialog({ open: controlledOpen, onOpenChange: controlledOnChange }: CreateEventDialogProps = {}) {
   const formRef = useRef<HTMLFormElement>(null);
 
-  // Kontrol buka/tutup dialog
-  const [open, setOpen] = useState(false);
+  // Mode uncontrolled: state dikelola internal (dipakai dari dashboard page)
+  const [internalOpen, setInternalOpen] = useState(false);
+
+  // Tentukan apakah pakai controlled atau uncontrolled mode
+  const isControlled = controlledOpen !== undefined;
+  const open = isControlled ? controlledOpen : internalOpen;
+  const setOpen = isControlled
+    ? (controlledOnChange ?? (() => {}))
+    : setInternalOpen;
 
   // isPending = true saat server action sedang berjalan (form & tombol di-disable)
   const [isPending, startTransition] = useTransition();
+  // Tambahan: simpan ref untuk mencegah linter warning tentang setOpen
+  const setOpenRef = setOpen;
 
   // Pesan error dari server action (validasi gagal, dsb)
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -95,7 +115,7 @@ export function CreateEventDialog() {
           formRef.current?.reset();
           setSelectedLocationType("ONLINE");
           setSelectedPlatform("GOOGLE_MEET");
-          setOpen(false);
+          setOpenRef(false);
         }
       } catch (error) {
         // Tampilkan pesan error dari server (misal: "Judul minimal 3 karakter")
@@ -114,7 +134,7 @@ export function CreateEventDialog() {
       onOpenChange={(nextOpen) => {
         // Blokir tutup dialog saat sedang loading untuk cegah state inconsistent
         if (!isPending) {
-          setOpen(nextOpen);
+          setOpenRef(nextOpen);
           // Reset error dan state saat dialog ditutup
           if (!nextOpen) {
             setErrorMessage(null);

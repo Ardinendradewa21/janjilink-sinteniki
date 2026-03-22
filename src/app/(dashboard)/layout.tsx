@@ -1,4 +1,4 @@
-import { LogOut, Menu } from "lucide-react";
+import { LogOut } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
@@ -7,7 +7,7 @@ import prisma from "@/lib/prisma";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { SidebarNav } from "@/components/dashboard/SidebarNav";
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { BottomTabBar } from "@/components/dashboard/BottomTabBar";
 
 // Utility sederhana untuk fallback inisial ketika image user tidak tersedia.
 function getInitials(name?: string | null) {
@@ -61,7 +61,9 @@ export default async function DashboardLayout({ children }: { children: ReactNod
 
   return (
     <div className="min-h-screen bg-stone-50 text-stone-900">
-      {/* Sidebar desktop: fixed di kiri, tampil mulai layar besar */}
+      {/* ─── Sidebar desktop (lg ke atas) ────────────────────────────────────
+          Di mobile digantikan oleh BottomTabBar.
+          fixed + inset-y-0: menempel penuh di kiri layar, tidak ikut scroll. */}
       <aside className="fixed inset-y-0 left-0 hidden w-72 flex-col border-r border-stone-200 bg-white lg:flex">
         <div className="border-b border-stone-200 px-6 py-5">
           <Link href="/" className="text-lg font-semibold tracking-tight text-stone-900">
@@ -83,49 +85,28 @@ export default async function DashboardLayout({ children }: { children: ReactNod
         </div>
       </aside>
 
+      {/* ─── Wrapper konten utama ─────────────────────────────────────────────
+          lg:pl-72: geser ke kanan selebar sidebar di desktop.
+          Di mobile tidak ada padding kiri (sidebar disembunyikan). */}
       <div className="flex min-h-screen flex-col lg:pl-72">
-        {/* Header atas: memuat tombol hamburger mobile + profil user dinamis */}
+        {/* ─── Header atas ──────────────────────────────────────────────────
+            Di mobile: tampilkan logo JanjiLink + avatar user (tanpa hamburger).
+            Di desktop: tampilkan label "Panel Host" + avatar. */}
         <header className="sticky top-0 z-30 border-b border-stone-200 bg-stone-50/95 backdrop-blur-sm">
-          <div className="flex h-16 items-center justify-between px-4 sm:px-6 lg:px-8">
-            <div className="flex items-center gap-3 lg:hidden">
-              <Sheet>
-                <SheetTrigger asChild>
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    className="border-stone-200 bg-white text-stone-700 hover:bg-stone-100 hover:text-stone-900"
-                  >
-                    <Menu className="h-5 w-5" />
-                    <span className="sr-only">Buka menu dashboard</span>
-                  </Button>
-                </SheetTrigger>
-                <SheetContent side="left" className="w-72 border-r border-stone-200 bg-white p-0 sm:max-w-72">
-                  <SheetHeader className="border-b border-stone-200 px-5 py-4 text-left">
-                    <SheetTitle className="text-base font-semibold text-stone-900">JanjiLink</SheetTitle>
-                    <SheetDescription className="text-stone-500">Navigasi panel host.</SheetDescription>
-                  </SheetHeader>
-                  <div className="p-4">
-                    <SidebarNav />
-                    <form action={logoutAction} className="mt-4 border-t border-stone-200 pt-4">
-                      <Button
-                        type="submit"
-                        variant="outline"
-                        className="w-full justify-start border-stone-200 text-stone-700 hover:bg-stone-100 hover:text-stone-900"
-                      >
-                        <LogOut className="h-4 w-4" />
-                        Logout
-                      </Button>
-                    </form>
-                  </div>
-                </SheetContent>
-              </Sheet>
-              <span className="text-sm font-semibold text-stone-900">Dashboard</span>
-            </div>
+          <div className="flex h-14 items-center justify-between px-4 sm:px-6 lg:h-16 lg:px-8">
+            {/* Logo JanjiLink — hanya di mobile (di desktop ada di sidebar) */}
+            <Link
+              href="/dashboard"
+              className="text-base font-bold tracking-tight text-stone-900 lg:hidden"
+            >
+              JanjiLink
+            </Link>
 
             <p className="hidden text-sm font-medium text-stone-500 lg:block">Panel Host</p>
 
+            {/* Avatar user + nama (desktop only) */}
             <div className="flex items-center gap-3 rounded-full border border-stone-200 bg-white px-2.5 py-1.5 shadow-sm">
-              <Avatar className="h-8 w-8">
+              <Avatar className="h-7 w-7 lg:h-8 lg:w-8">
                 <AvatarImage src={userImage} alt={userName} />
                 <AvatarFallback className="bg-emerald-100 text-xs font-semibold text-emerald-700">
                   {getInitials(userName)}
@@ -139,9 +120,18 @@ export default async function DashboardLayout({ children }: { children: ReactNod
           </div>
         </header>
 
-        {/* Area utama konten dashboard */}
-        <main className="flex-1 bg-stone-50 p-6 lg:p-8">{children}</main>
+        {/* ─── Konten halaman ───────────────────────────────────────────────
+            pb-24 lg:pb-8: tambah padding bawah di mobile agar konten tidak
+            tertutup BottomTabBar (64px bar + safe area). Di desktop tidak perlu. */}
+        <main className="flex-1 bg-stone-50 p-4 pb-24 sm:p-6 lg:p-8 lg:pb-8">
+          {children}
+        </main>
       </div>
+
+      {/* ─── Bottom Tab Bar (mobile only) ────────────────────────────────────
+          Dirender di luar flex column agar fixed positioning bekerja dengan benar.
+          lg:hidden memastikan hanya muncul di layar kecil. */}
+      <BottomTabBar />
     </div>
   );
 }

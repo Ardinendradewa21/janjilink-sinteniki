@@ -30,12 +30,19 @@ export async function createBooking(formData: FormData) {
   }
 
   const name = inviteeName.trim();
-  const email = inviteeEmail.trim();
   const wa = typeof inviteeWa === "string" ? inviteeWa.trim() : "";
+
+  // Email opsional — tamu bisa booking hanya dengan WA.
+  // Jika email diisi, validasi formatnya. Jika kosong atau placeholder internal, lewati.
+  const rawEmail = inviteeEmail.trim();
+  const isPlaceholderEmail = rawEmail.startsWith("wa.") && rawEmail.endsWith("@janjilink.local");
+  const email = isPlaceholderEmail ? "" : rawEmail;
 
   // Validasi input dasar
   if (name.length < 2) throw new Error("Nama minimal 2 karakter.");
-  if (!email.includes("@")) throw new Error("Format email tidak valid.");
+  if (!wa) throw new Error("Nomor WhatsApp wajib diisi.");
+  // Email hanya divalidasi jika benar-benar diisi
+  if (email && !email.includes("@")) throw new Error("Format email tidak valid.");
 
   // Ambil event type beserta data host dalam satu query.
   // Sebelumnya hanya mengambil `duration`, sekarang perlu nama/email/slug host
