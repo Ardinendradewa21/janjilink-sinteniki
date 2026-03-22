@@ -1,11 +1,12 @@
 "use client";
 
-import { ExternalLink, Loader2, MoreVertical, Power, Trash2 } from "lucide-react";
+import { ExternalLink, Loader2, MoreVertical, Power, QrCode, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useTransition } from "react";
 import { toast } from "sonner";
 import { deleteEventType, toggleEventType } from "@/server/actions/event";
 import { EditEventDialog } from "@/components/dashboard/EditEventDialog";
+import { QRCodeModal } from "@/components/dashboard/QRCodeModal";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -18,6 +19,7 @@ import {
 // ─── Props ───────────────────────────────────────────────────────────────────
 // Data lengkap event type yang ditampilkan di kartu dashboard.
 // platform & locationDetails ditambahkan agar EditEventDialog bisa pre-fill data.
+// appUrl diperlukan untuk membuat URL QR code yang benar (env-aware).
 type EventTypeCardProps = {
   id: string;
   title: string;
@@ -28,6 +30,8 @@ type EventTypeCardProps = {
   locationDetails: string | null;
   isActive: boolean;
   username: string;
+  // URL dasar aplikasi — dari NEXT_PUBLIC_APP_URL atau default localhost
+  appUrl?: string;
 };
 
 // ─── EventTypeCard ───────────────────────────────────────────────────────────
@@ -44,7 +48,10 @@ export function EventTypeCard({
   locationDetails,
   isActive,
   username,
+  appUrl = "http://localhost:3000",
 }: EventTypeCardProps) {
+  // URL lengkap halaman booking event ini — dipakai untuk QR code dan link eksternal
+  const bookingUrl = `${appUrl}/${username}/${id}`;
   const [isPending, startTransition] = useTransition();
 
   // Handler toggle aktif/nonaktif event type
@@ -155,6 +162,19 @@ export function EventTypeCard({
                 locationType={locationType}
                 platform={platform}
                 locationDetails={locationDetails}
+              />
+            </DropdownMenuItem>
+            {/* QR Code: membuka modal QR untuk dibagikan/diunduh */}
+            <DropdownMenuItem asChild onSelect={(e) => e.preventDefault()}>
+              <QRCodeModal
+                eventUrl={bookingUrl}
+                eventTitle={title}
+                trigger={
+                  <button className="relative flex w-full cursor-pointer select-none items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-none transition-colors hover:bg-stone-100 hover:text-stone-900">
+                    <QrCode className="h-4 w-4" />
+                    QR Code
+                  </button>
+                }
               />
             </DropdownMenuItem>
             {/* Toggle aktif/nonaktif */}
