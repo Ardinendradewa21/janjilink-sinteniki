@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx prisma:*)",
+      "Bash(ls \"c:/laragon/www/janjilink-sinteniki/src/app/\\(onboarding\\)/\")",
+      "Bash(ls \"c:/laragon/www/janjilink-sinteniki/src/app/\\(onboarding\\)/onboarding/\")"
+    ]
+  }
+}
