@@ -28,6 +28,12 @@ model User {
   // di halaman konfirmasi booking agar tamu bisa langsung menghubungi host via WA.
   // Format bebas — strip dan spasi akan dihapus saat membuat link.
   waNumber            String?
+  // Bio singkat host (opsional) — ditampilkan di halaman profil publik.
+  // Contoh: "Fotografer wedding profesional, 5 tahun pengalaman."
+  bio                 String?
+  // Tipe use case yang dipilih saat onboarding — misal "salon", "fotografer", dll.
+  // Disimpan sebagai string agar fleksibel tanpa perlu migrasi enum jika ada tipe baru.
+  useCaseType         String?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 

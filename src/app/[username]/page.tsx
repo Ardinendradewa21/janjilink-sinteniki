@@ -16,7 +16,8 @@ export default async function PublicProfilePage({ params }: PublicProfilePagePro
   //   2. Cek siapa yang sedang login (opsional — untuk deteksi owner)
   // Menggunakan Promise.all agar tidak sequential.
   const [user, viewerUserId] = await Promise.all([
-    prisma.user.findFirst({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (prisma.user.findFirst as any)({
       where: {
         OR: [{ slug: username }, { email: { startsWith: `${username}@` } }],
       },
@@ -24,6 +25,7 @@ export default async function PublicProfilePage({ params }: PublicProfilePagePro
         id: true,
         name: true,
         image: true,
+        bio: true,
         eventTypes: {
           where: { isActive: true },
           orderBy: { createdAt: "desc" },
@@ -36,7 +38,7 @@ export default async function PublicProfilePage({ params }: PublicProfilePagePro
           },
         },
       },
-    }),
+    }) as Promise<{ id: string; name: string | null; image: string | null; bio: string | null; eventTypes: { id: string; title: string; description: string | null; duration: number; locationType: "ONLINE" | "OFFLINE" }[] } | null>,
     // getOptionalUserId tidak redirect jika belum login (berbeda dengan getRequiredUserId)
     // — cocok untuk halaman publik yang bisa diakses siapapun
     getOptionalUserId(),

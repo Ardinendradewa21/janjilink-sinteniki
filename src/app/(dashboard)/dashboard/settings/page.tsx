@@ -36,6 +36,7 @@ export default async function SettingsPage() {
           email={user.email}
           slug={user.slug}
           waNumber={user.waNumber ?? null}
+          bio={user.bio ?? null}
         />
       </div>
     </section>

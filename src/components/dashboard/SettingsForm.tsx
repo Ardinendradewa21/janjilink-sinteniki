@@ -16,13 +16,15 @@ type SettingsFormProps = {
   slug: string;
   // Nomor WA host (opsional) — ditampilkan di halaman konfirmasi booking tamu
   waNumber: string | null;
+  // Bio singkat (opsional) — ditampilkan di halaman profil publik
+  bio: string | null;
 };
 
 // ─── SettingsForm ────────────────────────────────────────────────────────────
 // Form client component untuk mengedit profil user (nama + slug/username).
 // Menggunakan useActionState (React 19) agar error/success langsung tampil.
 // Email ditampilkan read-only karena tidak bisa diubah.
-export function SettingsForm({ name, email, slug, waNumber }: SettingsFormProps) {
+export function SettingsForm({ name, email, slug, waNumber, bio }: SettingsFormProps) {
   const [state, formAction, isPending] = useActionState(updateProfile, null);
 
   // Ref untuk melacak apakah sudah pernah menampilkan toast (hindari duplikat)
@@ -127,6 +129,26 @@ export function SettingsForm({ name, email, slug, waNumber }: SettingsFormProps)
         <p className="mt-1 text-xs text-stone-400">
           Ditampilkan sebagai tombol WA di halaman konfirmasi booking tamu.
           Isi tanpa awalan 0 atau +62, contoh: 81234567890
+        </p>
+      </div>
+
+      {/* Bio singkat (opsional) — tampil di halaman profil publik */}
+      <div>
+        <label htmlFor="bio" className="mb-1.5 block text-sm font-medium text-stone-700">
+          Bio singkat <span className="font-normal text-stone-400">(opsional)</span>
+        </label>
+        <textarea
+          id="bio"
+          name="bio"
+          rows={3}
+          maxLength={160}
+          defaultValue={bio ?? ""}
+          disabled={isPending}
+          placeholder="Contoh: Fotografer wedding profesional, 5 tahun pengalaman di Bandung."
+          className="w-full resize-none rounded-xl border border-stone-200 px-3 py-2 text-sm text-stone-900 placeholder:text-stone-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-1 disabled:opacity-60"
+        />
+        <p className="mt-1 text-xs text-stone-400">
+          Tampil di halaman profilmu. Maksimal 160 karakter.
         </p>
       </div>
 

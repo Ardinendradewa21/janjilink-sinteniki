@@ -35,10 +35,12 @@ export async function updateProfile(
   // Baca dan bersihkan input dari form
   const name = (formData.get("name") as string | null)?.trim() ?? "";
   const slug = (formData.get("slug") as string | null)?.trim().toLowerCase() ?? "";
-  // Nomor WA: hapus semua karakter selain angka dan + di awal agar konsisten
+  // Nomor WA: simpan as-is (kosong = hapus nomor WA lama)
   const waRaw = (formData.get("waNumber") as string | null)?.trim() ?? "";
-  // Simpan as-is (termasuk kosong = hapus nomor WA lama)
   const waNumber = waRaw.length > 0 ? waRaw : null;
+  // Bio: opsional, max 160 karakter
+  const bioRaw = (formData.get("bio") as string | null)?.trim() ?? "";
+  const bio = bioRaw.slice(0, 160) || null;
 
   // Validasi nama: minimal 2 karakter agar tidak kosong/absurd
   if (name.length < 2) return { error: "Nama minimal 2 karakter." };
@@ -60,9 +62,10 @@ export async function updateProfile(
   if (existing) return { error: "Username sudah dipakai oleh pengguna lain." };
 
   // Simpan perubahan nama, slug, dan nomor WA ke database
-  await prisma.user.update({
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  await (prisma.user.update as any)({
     where: { id: userId },
-    data: { name, slug, waNumber },
+    data: { name, slug, waNumber, bio },
   });
 
   // Refresh cache halaman dashboard agar data terbaru langsung muncul

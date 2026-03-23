@@ -49,6 +49,9 @@ export async function saveProfileStep(
 
   const name = (formData.get("name") as string | null)?.trim() ?? "";
   const slug = (formData.get("slug") as string | null)?.trim().toLowerCase() ?? "";
+  // bio dan useCaseType dari step 0 (dikirim sebagai hidden input)
+  const bio = (formData.get("bio") as string | null)?.trim() ?? "";
+  const useCaseType = (formData.get("useCaseType") as string | null)?.trim() ?? "";
 
   // Validasi nama
   if (name.length < 2) return { error: "Nama minimal 2 karakter." };
@@ -68,10 +71,16 @@ export async function saveProfileStep(
   });
   if (duplicate) return { error: "Link ini sudah dipakai. Coba nama lain." };
 
-  // Simpan nama + slug ke DB
-  await prisma.user.update({
+  // Simpan nama, slug, bio, dan useCaseType ke DB
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  await (prisma.user.update as any)({
     where: { id: userId },
-    data: { name, slug },
+    data: {
+      name,
+      slug,
+      bio: bio || null,
+      useCaseType: useCaseType || null,
+    },
   });
 
   return { success: true };

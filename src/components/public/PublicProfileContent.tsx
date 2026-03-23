@@ -32,6 +32,7 @@ type PublicEventType = {
 type PublicUser = {
   name: string | null;
   image: string | null;
+  bio: string | null;
   eventTypes: PublicEventType[];
 };
 
@@ -60,7 +61,7 @@ const stagger = {
 // Setiap kartu slide dari bawah saat pertama kali muncul
 const slideUp = {
   hidden:  { opacity: 0, y: 20 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.35, ease: [0.22, 1, 0.36, 1] as number[] } },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.35, ease: [0.22, 1, 0.36, 1] as [number, number, number, number] } },
 };
 
 // ─── EventCard ───────────────────────────────────────────────────────────────
@@ -181,7 +182,7 @@ export function PublicProfileContent({ username, user, isOwner }: PublicProfileC
 
             <h1 className="text-xl font-bold text-stone-900">{displayName}</h1>
             <p className="mt-1 text-sm leading-relaxed text-stone-500">
-              Pilih jenis pertemuan di bawah dan tentukan waktu yang cocok untukmu.
+              {user.bio ?? "Pilih jenis pertemuan di bawah dan tentukan waktu yang cocok untukmu."}
             </p>
           </div>
         </motion.div>

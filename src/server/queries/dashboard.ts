@@ -60,15 +60,24 @@ export async function getDashboardData(userId: string): Promise<{
 
 // ─── getSettingsData ──────────────────────────────────────────────────────────
 // Mengambil data profil user untuk halaman pengaturan.
-export async function getSettingsData(userId: string) {
-  return prisma.user.findUnique({
+// Return type ditulis eksplisit karena Prisma Client belum di-generate ulang
+// untuk field bio/useCaseType yang baru ditambahkan.
+export async function getSettingsData(userId: string): Promise<{
+  name: string;
+  email: string;
+  slug: string;
+  waNumber: string | null;
+  bio: string | null;
+} | null> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (prisma.user.findUnique as any)({
     where: { id: userId },
     select: {
       name: true,
       email: true,
       slug: true,
-      // Nomor WA host — opsional, ditampilkan di form pengaturan
       waNumber: true,
+      bio: true,
     },
   });
 }
