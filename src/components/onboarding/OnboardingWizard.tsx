@@ -36,13 +36,13 @@ import { DurationPicker } from "@/components/ui/DurationPicker";
 
 // Pilihan jenis pengguna (Step 0)
 const USE_CASES = [
-  { id: "freelancer",    emoji: "💼", label: "Freelancer / Konsultan", desc: "Terima booking dari klien" },
-  { id: "educator",     emoji: "🎓", label: "Dosen / Tutor / Guru",   desc: "Jadwal bimbingan & konsultasi" },
-  { id: "health",       emoji: "🏥", label: "Tenaga Kesehatan",       desc: "Antrian pasien & konseling" },
-  { id: "umkm",         emoji: "🛍️", label: "Usaha Jasa / UMKM",     desc: "Salon, fotografer, bengkel, dll" },
-  { id: "organization", emoji: "🤝", label: "Organisasi / Komunitas", desc: "BEM, komunitas, kepanitiaan" },
-  { id: "hr",           emoji: "🏢", label: "HR / Rekrutmen",        desc: "Interview dan 1-on-1 karyawan" },
-  { id: "other",        emoji: "✨", label: "Lainnya",               desc: "Untuk kebutuhanku sendiri" },
+  { id: "freelancer",    emoji: "", label: "Freelancer / Konsultan", desc: "Terima booking dari klien" },
+  { id: "educator",     emoji: "", label: "Dosen / Tutor / Guru",   desc: "Jadwal bimbingan & konsultasi" },
+  { id: "health",       emoji: "", label: "Tenaga Kesehatan",       desc: "Antrian pasien & konseling" },
+  { id: "umkm",         emoji: "", label: "Usaha Jasa / UMKM",     desc: "Salon, fotografer, bengkel, dll" },
+  { id: "organization", emoji: "", label: "Organisasi / Komunitas", desc: "BEM, komunitas, kepanitiaan" },
+  { id: "hr",           emoji: "", label: "HR / Rekrutmen",        desc: "Interview dan 1-on-1 karyawan" },
+  { id: "other",        emoji: "", label: "Lainnya",               desc: "Untuk kebutuhanku sendiri" },
 ] as const;
 
 // Default nama + durasi event berdasarkan use case (untuk auto-fill Step 3)
@@ -189,11 +189,8 @@ export function OnboardingWizard({ initialName, initialSlug }: Props) {
     <div className="w-full max-w-lg">
       {/* ── Header ── */}
       <div className="mb-6 text-center">
-        <a href="/" className="text-xl font-bold tracking-tight text-stone-900">
-          JanjiLink
-        </a>
         {currentStep > 0 && (
-          <p className="mt-3 text-sm font-medium text-emerald-600">
+          <p className="text-sm font-medium text-emerald-600">
             Langkah {currentStep} dari {STEPS.length - 1}
           </p>
         )}

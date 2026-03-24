@@ -8,6 +8,7 @@
 // Lihat juga: src/server/queries/bookings.ts, src/server/queries/analytics.ts
 
 import prisma from "@/lib/prisma";
+import { toWIB } from "@/lib/date";
 
 // ─── Tipe Data ────────────────────────────────────────────────────────────────
 export type DashboardEventType = {
@@ -56,6 +57,54 @@ export async function getDashboardData(userId: string): Promise<{
     // Fallback ke string kosong jika slug tidak ditemukan (seharusnya tidak terjadi)
     slug: userRecord?.slug ?? "",
   };
+}
+
+// ─── getDashboardStats ────────────────────────────────────────────────────────
+// Quick stats untuk strip angka di atas dashboard:
+//   todayCount  — booking hari ini (WIB), status bukan CANCELLED
+//   weekCount   — booking minggu ini (Senin–sekarang, WIB), status bukan CANCELLED
+//   pendingCount — booking menunggu konfirmasi (status PENDING, semua waktu)
+export async function getDashboardStats(userId: string): Promise<{
+  todayCount: number;
+  weekCount: number;
+  pendingCount: number;
+}> {
+  const now = new Date();
+  // Shift ke WIB agar operasi getUTC* membaca nilai waktu WIB
+  const wib = toWIB(now);
+
+  // Batas awal hari ini dalam WIB → konversi ke UTC untuk query Prisma
+  const todayStartWib = new Date(Date.UTC(wib.getUTCFullYear(), wib.getUTCMonth(), wib.getUTCDate()));
+  const todayStartUtc = new Date(todayStartWib.getTime() - 7 * 60 * 60 * 1000);
+  const tomorrowUtc   = new Date(todayStartUtc.getTime() + 24 * 60 * 60 * 1000);
+
+  // Batas awal Senin minggu ini dalam WIB
+  const dow = wib.getUTCDay(); // 0=Min, 1=Sen, ..., 6=Sab
+  const daysFromMon = dow === 0 ? 6 : dow - 1;
+  const weekStartWib = new Date(Date.UTC(wib.getUTCFullYear(), wib.getUTCMonth(), wib.getUTCDate() - daysFromMon));
+  const weekStartUtc = new Date(weekStartWib.getTime() - 7 * 60 * 60 * 1000);
+
+  const [todayCount, weekCount, pendingCount] = await Promise.all([
+    prisma.booking.count({
+      where: {
+        eventType: { userId },
+        startTime: { gte: todayStartUtc, lt: tomorrowUtc },
+        status: { not: "CANCELLED" },
+      },
+    }),
+    prisma.booking.count({
+      where: {
+        eventType: { userId },
+        startTime: { gte: weekStartUtc },
+        status: { not: "CANCELLED" },
+      },
+    }),
+    prisma.booking.count({
+      where: { eventType: { userId }, status: "PENDING" },
+    }),
+  ]);
+
+  return { todayCount, weekCount, pendingCount };
 }
 
 // ─── getSettingsData ──────────────────────────────────────────────────────────

@@ -5,6 +5,7 @@ import {
   ArrowRight,
   CalendarCheck,
   CheckCircle2,
+  ChevronDown,
   Clock3,
   FileText,
   Link2,
@@ -16,6 +17,11 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import {
+  FAQStructuredData,
+  FAQS,
+  WebsiteStructuredData,
+} from "@/components/seo/StructuredData";
 
 // ─── Konstanta animasi ────────────────────────────────────────────────────────
 // Dipakai berulang di seluruh halaman agar transisi masuk konsisten.
@@ -132,6 +138,10 @@ export default function HomePage() {
           </div>
         </div>
       </header>
+
+      {/* Structured data untuk mesin pencari dan AI (tidak terlihat di UI) */}
+      <WebsiteStructuredData />
+      <FAQStructuredData />
 
       <main>
         {/* ─── HERO SECTION ────────────────────────────────────────────────
@@ -377,6 +387,43 @@ export default function HomePage() {
                   </motion.div>
                 ))}
               </div>
+            </motion.div>
+          </div>
+        </section>
+
+        {/* ─── FAQ ─────────────────────────────────────────────────────────
+            Accordion FAQ: terlihat oleh user DAN diindeks AI mesin pencari.
+            Menggunakan <details>/<summary> native — tanpa JS tambahan. */}
+        <section className="border-t border-stone-200 bg-white">
+          <div className="mx-auto w-full max-w-3xl px-4 py-16 sm:px-6 lg:px-8">
+            <motion.div
+              variants={staggerContainer}
+              initial="hidden"
+              whileInView="visible"
+              viewport={{ once: true, amount: 0.15 }}
+            >
+              <motion.h2
+                variants={fadeUp}
+                className="text-center text-2xl font-bold text-stone-900 sm:text-3xl"
+              >
+                Pertanyaan yang sering ditanya
+              </motion.h2>
+              <motion.div variants={fadeUp} className="mt-8 space-y-3">
+                {FAQS.map((faq, i) => (
+                  <details
+                    key={i}
+                    className="group rounded-xl border border-stone-200 bg-stone-50 open:bg-white"
+                  >
+                    <summary className="flex cursor-pointer list-none items-center justify-between px-5 py-4">
+                      <span className="font-medium text-stone-900">{faq.q}</span>
+                      <ChevronDown className="h-4 w-4 shrink-0 text-stone-400 transition-transform duration-200 group-open:rotate-180" />
+                    </summary>
+                    <p className="px-5 pb-5 text-sm leading-relaxed text-stone-600">
+                      {faq.a}
+                    </p>
+                  </details>
+                ))}
+              </motion.div>
             </motion.div>
           </div>
         </section>
