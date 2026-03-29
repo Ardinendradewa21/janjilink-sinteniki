@@ -1,10 +1,12 @@
 import type { MetadataRoute } from "next";
 import prisma from "@/lib/prisma";
+export const dynamic = 'force-dynamic'; // ← tambahkan ini di atas
 
 // ─── sitemap.ts ───────────────────────────────────────────────────────────────
 // Sitemap dinamis yang diakses crawler di /sitemap.xml.
 // Mencakup:
 //   1. Halaman statis (landing, login, register)
+//   2. ajsdaskdasjdk
 //   2. Semua halaman profil publik host yang sudah onboarding
 //   3. Semua event type aktif dari host yang sudah onboarding
 //
